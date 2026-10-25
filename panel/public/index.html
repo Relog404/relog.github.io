@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CS2 Panel — управление сервером и каталог скинов</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">CS2</span>
+      <div>
+        <h1>CS2 Panel</h1>
+        <p class="muted">Управление выделенным сервером · каталог скинов · сборки по Steam</p>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <label class="server-select" id="serverSelectWrap" hidden>
+        <span>Сервер</span>
+        <select id="serverSelect"></select>
+      </label>
+      <div id="authBox" class="auth-box"></div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="server">Сервер</button>
+    <button class="tab" data-tab="skins">Скины</button>
+    <button class="tab" data-tab="loadouts">Мои сборки</button>
+    <button class="tab admin-only" data-tab="settings" hidden>Настройки</button>
+  </nav>
+
+  <main>
+    <!-- ------------------------------- СЕРВЕР ------------------------------- -->
+    <section class="panel active" id="tab-server">
+      <div id="statusPill" class="pill pill-warn">загрузка…</div>
+
+      <div class="cards" id="infoCards"></div>
+
+      <div class="grid-2">
+        <div class="block">
+          <h2>Игроки <button class="btn btn-ghost btn-sm" id="refreshBtn">обновить</button></h2>
+          <div class="table-wrap">
+            <table class="table" id="playersTable">
+              <thead><tr><th>Игрок</th><th>SteamID64</th><th>Пинг</th><th>Время</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted small">Авторизация в панели — через Steam OpenID. Имена/аватары подтягиваются через Steam Web API, если задан <code>STEAM_API_KEY</code>.</p>
+        </div>
+
+        <div class="block">
+          <h2>Быстрые действия</h2>
+          <div class="actions">
+            <button class="btn" data-action="restart">Рестарт раунда</button>
+            <button class="btn" data-action="pausematch">Пауза матча</button>
+            <button class="btn" data-action="unpausematch">Снять паузу</button>
+            <button class="btn btn-ghost" data-action="halftime">Сменить стороны</button>
+          </div>
+
+          <div class="row">
+            <select id="mapSelect">
+              <option value="de_mirage">de_mirage</option>
+              <option value="de_inferno">de_inferno</option>
+              <option value="de_nuke">de_nuke</option>
+              <option value="de_ancient">de_ancient</option>
+              <option value="de_anubis">de_anubis</option>
+              <option value="de_dust2">de_dust2</option>
+              <option value="de_overpass">de_overpass</option>
+              <option value="de_vertigo">de_vertigo</option>
+              <option value="de_train">de_train</option>
+              <option value="cs_office">cs_office</option>
+            </select>
+            <button class="btn" id="mapBtn">Сменить карту</button>
+          </div>
+
+          <div class="row">
+            <input id="sayInput" type="text" placeholder="Сообщение в чат сервера" maxlength="200" />
+            <button class="btn" id="sayBtn">Отправить</button>
+          </div>
+
+          <div class="row">
+            <input id="botsInput" type="number" min="0" max="10" placeholder="Боты: 0-10" />
+            <button class="btn btn-ghost" id="botsBtn">Задать ботов</button>
+          </div>
+
+          <div class="row">
+            <input id="cfgInput" type="text" placeholder="exec cfg (например gamemode_competitive)" />
+            <button class="btn btn-ghost" id="cfgBtn">Выполнить конфиг</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <h2>RCON-консоль</h2>
+        <form class="console-form" id="consoleForm">
+          <input id="consoleInput" type="text" placeholder="например: mp_maxmoney 16000" autocomplete="off" />
+          <button class="btn" type="submit">Выполнить</button>
+        </form>
+        <pre class="console" id="consoleOut"></pre>
+        <p class="muted small">Консоль доступна только админам панели (SteamID из <code>ADMIN_STEAM_IDS</code>). Опасные команды запросят подтверждение.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------- СКИНЫ ------------------------------- -->
+    <section class="panel" id="tab-skins">
+      <div class="filters">
+        <input id="skinQuery" type="search" placeholder="Поиск: AWP, Asiimov, Fade…" />
+        <select id="skinWeapon"><option value="">Всё оружие</option></select>
+        <select id="skinRarity">
+          <option value="">Любая редкость</option>
+          <option value="exceedingly rare">Exceedingly Rare (ножи/перчатки)</option>
+          <option value="covert">Covert</option>
+          <option value="classified">Classified</option>
+          <option value="restricted">Restricted</option>
+          <option value="mil-spec">Mil-Spec</option>
+          <option value="industrial">Industrial</option>
+          <option value="consumer">Consumer</option>
+        </select>
+        <select id="skinSort">
+          <option value="rarity">Сортировка: редкость</option>
+          <option value="weapon">Сортировка: оружие</option>
+          <option value="name">Сортировка: название</option>
+          <option value="float">Сортировка: износ</option>
+        </select>
+      </div>
+
+      <p class="notice">
+        Это справочник/вишлист: панель <b>не меняет</b> ничего в игровом клиенте и не трогает файлы CS2.
+        Клиентские модификации скинов нарушают правила Steam и приводят к VAC-бану — здесь такого нет.
+      </p>
+
+      <div class="skins" id="skinGrid"></div>
+      <div class="pager">
+        <button class="btn btn-ghost btn-sm" id="prevPage">←</button>
+        <span id="pageLabel" class="muted small"></span>
+        <button class="btn btn-ghost btn-sm" id="nextPage">→</button>
+      </div>
+
+      <div class="block sticky-draft" id="draftBlock" hidden>
+        <h2>Черновик сборки <span class="muted small" id="draftCount"></span></h2>
+        <ul class="draft-list" id="draftList"></ul>
+        <div class="row">
+          <input id="loadoutName" type="text" placeholder="Название сборки" maxlength="80" />
+          <label class="checkbox"><input type="checkbox" id="loadoutPublic" /> публичная</label>
+          <button class="btn" id="saveLoadout">Сохранить по SteamID</button>
+        </div>
+        <p class="muted small" id="draftHint">Войдите через Steam, чтобы сохранять сборки.</p>
+      </div>
+    </section>
+
+    <!-- ------------------------------ СБОРКИ ------------------------------ -->
+    <section class="panel" id="tab-loadouts">
+      <div class="block">
+        <h2>Мои сборки</h2>
+        <p class="muted small" id="myLoadoutsHint">Войдите через Steam — сборки привязываются к вашему SteamID64.</p>
+        <div class="loadouts" id="myLoadouts"></div>
+      </div>
+      <div class="block">
+        <h2>Публичные сборки игроков</h2>
+        <div class="loadouts" id="publicLoadouts"></div>
+      </div>
+    </section>
+
+    <!-- ---------------------------- НАСТРОЙКИ ----------------------------- -->
+    <section class="panel" id="tab-settings">
+      <div class="block">
+        <h2>Серверы</h2>
+        <form class="server-form" id="serverForm">
+          <input id="srvName" type="text" placeholder="Название" />
+          <input id="srvHost" type="text" placeholder="IP / хост" required />
+          <input id="srvGamePort" type="number" placeholder="Порт игры" value="27015" />
+          <input id="srvRconPort" type="number" placeholder="RCON порт" value="27015" />
+          <input id="srvPassword" type="password" placeholder="RCON пароль" required />
+          <button class="btn" type="submit">Добавить</button>
+        </form>
+        <div class="loadouts" id="serverList"></div>
+      </div>
+
+      <div class="block">
+        <h2>Состояние конфигурации</h2>
+        <ul class="kv" id="configState"></ul>
+        <p class="muted small">
+          Все настройки — через переменные окружения, см. <code>.env.example</code>.
+          Данные (серверы, сборки, профили) лежат в <code>data/store.json</code>.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="muted small">CS2 Panel · Node.js + Express · RCON (Source) · Steam OpenID</span>
+  </footer>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/app.js"></script>
+</body>
+</html>

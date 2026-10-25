@@ -1,0 +1,17 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Веб-панель: локальные настройки и пользовательские данные
+panel/.env
+panel/data/store.json
+panel/data/skins.json
+
+# Результаты установки CS2 (не коммитим бинарники игры)
+cs2-server/steamcmd/
+cs2-server/game/
+
+# Прочее
+.DS_Store
+Thumbs.db
+*.log

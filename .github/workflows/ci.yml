@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  panel:
+    name: Panel (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: panel
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: panel/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Smoke check (boot panel, hit /api/health)
+        env:
+          PORT: 3111
+          DEMO_MODE: '1'
+          SESSION_SECRET: ci-secret
+          ADMIN_STEAM_IDS: '76561190000000001'
+        run: |
+          node src/server.js &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3111/api/health; then echo; exit 0; fi
+            sleep 1
+          done
+          echo "panel did not start in time" >&2
+          exit 1
