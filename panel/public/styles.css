@@ -202,3 +202,121 @@ code { background: #0b1017; border: 1px solid var(--line); border-radius: 5px; p
 }
 .toast.err { border-color: var(--err); color: #ffb4b0; }
 .toast.ok { border-color: var(--ok); color: #a9e5b4; }
+
+/* ============================ кошелёк и шапка ============================ */
+.wallet {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 12px;
+}
+.wallet .coin { font-size: 16px; }
+.wallet-coins { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.disclaimer {
+  margin: 0; padding: 8px 22px;
+  background: rgba(245, 166, 35, .08); border-bottom: 1px solid var(--line);
+  color: #e8d6b4; font-size: 12.5px; text-align: center;
+}
+
+/* ============================== карточки ================================ */
+.skin-art {
+  height: 78px; border-radius: 8px; margin-bottom: 10px; display: grid; place-items: center; font-size: 30px;
+  background: linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.01));
+  border: 1px solid rgba(255,255,255,.05);
+}
+.skin-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.price { font-size: 12.5px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.skin.selected { box-shadow: 0 0 0 2px var(--accent) inset; }
+.btn-buy { padding: 4px 10px; }
+
+/* =============================== апгрейд ================================ */
+.upgrade-shell { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .upgrade-shell { grid-template-columns: 1fr; } }
+
+.vault-picker { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
+.pick {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: var(--bg-soft); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 9px;
+  cursor: pointer; font-size: 13.5px;
+}
+.pick.picked { background: rgba(245, 166, 35, .1); border-color: #4a3a17; }
+.pick-icon { font-size: 17px; }
+.pick-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick[data-rarity="covert"] { border-left-color: var(--r-covert); }
+.pick[data-rarity="classified"] { border-left-color: var(--r-classified); }
+.pick[data-rarity="restricted"] { border-left-color: var(--r-restricted); }
+.pick[data-rarity="mil-spec"] { border-left-color: var(--r-milspec); }
+.pick[data-rarity="industrial"] { border-left-color: var(--r-industrial); }
+.pick[data-rarity="consumer"] { border-left-color: var(--r-consumer); }
+.pick[data-rarity="exceedingly rare"] { border-left-color: var(--r-exceedingly); }
+
+.target-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+
+.roulette-block { position: relative; }
+.chance-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.chance-meter {
+  position: relative; flex: 1 1 260px; height: 34px; background: #0b1017;
+  border: 1px solid var(--line); border-radius: 999px; overflow: hidden;
+}
+.chance-fill {
+  height: 100%; background: linear-gradient(90deg, #2b7fff, #8847ff 60%, var(--r-exceedingly));
+  transition: width .35s ease;
+}
+.chance-text {
+  position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0,0,0,.7);
+}
+.upgrade-summary { flex: 1 1 240px; font-size: 13.5px; }
+.btn-spin {
+  padding: 12px 28px; font-weight: 700; font-size: 15px; border-radius: 999px;
+  background: linear-gradient(180deg, #ffb84d, #f59300); color: #1a1206; border-color: #ffcf7a;
+}
+.btn-spin:hover { color: #1a1206; filter: brightness(1.07); }
+
+.reel { position: relative; border: 1px solid var(--line); border-radius: var(--radius); background: #0b1017; overflow: hidden; }
+.reel-marker {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; transform: translateX(-50%);
+  background: linear-gradient(180deg, var(--accent), transparent); z-index: 3; pointer-events: none;
+  box-shadow: 0 0 18px rgba(245,166,35,.7);
+}
+.reel-viewport { overflow: hidden; padding: 14px 0; }
+.reel-track { display: flex; gap: 10px; will-change: transform; padding-left: 10px; }
+.reel-cell {
+  flex: 0 0 132px; width: 132px; height: 132px; border-radius: 10px; padding: 8px;
+  background: var(--bg-card); border: 1px solid var(--line); border-top: 3px solid var(--line);
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center;
+}
+.reel-cell.win { border-color: var(--accent); box-shadow: 0 0 22px rgba(245,166,35,.35); }
+.reel-cell[data-rarity="covert"] { border-top-color: var(--r-covert); }
+.reel-cell[data-rarity="classified"] { border-top-color: var(--r-classified); }
+.reel-cell[data-rarity="restricted"] { border-top-color: var(--r-restricted); }
+.reel-cell[data-rarity="mil-spec"] { border-top-color: var(--r-milspec); }
+.reel-cell[data-rarity="industrial"] { border-top-color: var(--r-industrial); }
+.reel-cell[data-rarity="consumer"] { border-top-color: var(--r-consumer); }
+.reel-cell[data-rarity="exceedingly rare"] { border-top-color: var(--r-exceedingly); }
+.reel-art { font-size: 30px; }
+.reel-name { font-size: 11.5px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.reel-price { font-size: 11.5px; color: var(--accent); }
+
+.result { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--bg-soft); }
+.result.win { border-color: rgba(63,185,80,.5); background: rgba(63,185,80,.1); }
+.result.lose { border-color: rgba(248,81,73,.4); background: rgba(248,81,73,.08); }
+.result-title { font-weight: 700; margin-bottom: 6px; }
+.result-body { font-size: 13.5px; color: #cfdae6; margin-bottom: 10px; }
+
+.fair { margin-top: 16px; }
+.fair summary { cursor: pointer; color: var(--muted); font-size: 13.5px; }
+
+.history { display: flex; flex-direction: column; gap: 6px; }
+.hist-row {
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px; font-size: 13px;
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 9px;
+}
+.hist-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #22303f; color: var(--muted); }
+.hist-badge.win, .hist-row.win .hist-badge { background: rgba(63,185,80,.18); color: #8ee29b; }
+.hist-badge.lose, .hist-row.lose .hist-badge { background: rgba(248,81,73,.16); color: #ff9c96; }
+
+/* ============================== хранилище =============================== */
+.vault-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+.warn { color: var(--warn); font-size: 12.5px; }

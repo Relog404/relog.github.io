@@ -8,7 +8,17 @@ const state = {
   status: null,
   draft: [],
   page: 1,
+  targetPage: 1,
+  econ: null,
+  selection: [], // uid предметов, поставленных на апгрейд
+  target: null,  // предмет-цель из каталога
+  chance: 0,
+  spinning: false,
 };
+
+const CELL_W = 132;
+const CELL_GAP = 10;
+const CELL_STEP = CELL_W + CELL_GAP;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -48,6 +58,31 @@ function toast(message, kind = '') {
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+const coins = (value) => `${Number(value).toLocaleString('ru-RU')} 🪙`;
+
+const CATEGORY_ICON = {
+  'Ножи': '🔪', 'Перчатки': '🧤', 'Винтовки': '🔫', 'Пистолеты': '🔫',
+  'Снайперские': '🎯', 'Пистолеты-пулемёты': '🔫', 'Дробовики': '💥', 'Стикеры': '⭐',
+  'Медали': '🏅', 'Значки': '📌', 'Кейсы': '📦', 'Музыка': '🎵', 'Патчи': '🧩', 'Агенты': '🕵️',
+};
+
+function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {}) {
+  const icon = CATEGORY_ICON[item.category] || '🎁';
+  const footer = {
+    shop: `<span class="price">${coins(item.price)}</span><button class="btn btn-sm btn-buy" data-buy="${escapeHtml(item.id)}">купить</button>`,
+    target: `<span class="price">${coins(item.price)}</span><button class="btn btn-sm" data-target="${escapeHtml(item.id)}">цель</button>`,
+    vault: `<span class="price">${coins(item.price)}</span><button class="btn btn-sm btn-ghost" data-sell="${escapeHtml(item.uid)}">продать</button>`,
+  }[mode];
+
+  return `<div class="skin ${selected ? 'selected' : ''} ${inDraft ? 'in-draft' : ''}" data-rarity="${escapeHtml(item.rarity)}" data-id="${escapeHtml(item.id)}">
+    <div class="skin-art"><span>${icon}</span></div>
+    <div class="weapon">${escapeHtml(item.weapon)} · ${escapeHtml(item.category)}</div>
+    <div class="pattern">${escapeHtml(item.pattern)}</div>
+    <div class="meta"><span class="rarity">${escapeHtml(item.rarity)}</span><span>${item.float ? `износ ${item.float[0]}–${item.float[1]}` : ''}</span></div>
+    <div class="skin-foot">${footer}</div>
+  </div>`;
+}
+
 /* --------------------------------- auth --------------------------------- */
 
 async function loadSession() {
@@ -69,7 +104,10 @@ function renderAuth() {
     $('#logoutBtn').onclick = async () => {
       await api('/api/logout', { method: 'POST' });
       state.user = null;
+      state.econ = null;
       renderAuth();
+      renderWallet();
+      renderVault();
       renderLoadouts();
       toast('Вы вышли из панели');
     };
@@ -78,16 +116,23 @@ function renderAuth() {
   $('#draftHint').textContent = state.user
     ? `Сборка сохранится за SteamID ${state.user.steamId}`
     : 'Войдите через Steam, чтобы сохранять сборки.';
+  renderWallet();
 }
 
 /* -------------------------------- config -------------------------------- */
 
 async function loadConfig() {
   state.config = await api('/api/config');
+  const economy = state.config.economy || {};
   const rows = [
     ['Режим демо', state.config.demoMode ? 'включён' : 'выключен'],
     ['Steam Web API ключ', state.config.steamApiKey ? 'задан' : 'не задан'],
     ['Админы панели', state.config.admins.length ? state.config.admins.join(', ') : 'не заданы'],
+    ['Экономика', 'виртуальные монеты, без реальных ставок'],
+    ['Стартовый баланс', `${economy.startCoins ?? '—'} 🪙`],
+    ['Ежедневный бонус', `${economy.dailyCoins ?? '—'} 🪙`],
+    ['Коэффициент апгрейда', economy.edge ?? '—'],
+    ['Возврат при продаже', economy.sellRate ? `${Math.round(economy.sellRate * 100)}%` : '—'],
     ['Управление серверами', state.config.allowServerManagement ? 'разрешено' : 'запрещено'],
     ['Базовый URL', state.config.baseUrl],
   ];
@@ -96,7 +141,436 @@ async function loadConfig() {
     .join('');
 }
 
-/* -------------------------------- servers ------------------------------- */
+/* ------------------------------- экономика ------------------------------ */
+
+async function loadEconomy() {
+  if (!state.user) {
+    state.econ = null;
+    renderWallet();
+    renderVault();
+    renderUpgradePicker();
+    return;
+  }
+  try {
+    state.econ = await api('/api/economy/state');
+  } catch (error) {
+    state.econ = null;
+  }
+  renderWallet();
+  renderVault();
+  renderUpgradePicker();
+}
+
+function renderWallet() {
+  const wallet = $('#wallet');
+  wallet.hidden = !state.user;
+  if (!state.user) return;
+  $('#coinBalance').textContent = Number(state.econ?.coins ?? 0).toLocaleString('ru-RU');
+  const daily = state.econ?.daily;
+  const btn = $('#dailyBtn');
+  btn.disabled = !daily?.available;
+  btn.textContent = daily?.available ? `+${daily.amount}` : 'получено';
+}
+
+function renderVault() {
+  const grid = $('#vaultGrid');
+  const cards = $('#vaultCards');
+  if (!state.user) {
+    grid.innerHTML = '<p class="empty">Войдите через Steam, чтобы увидеть свои предметы.</p>';
+    cards.innerHTML = '';
+    $('#vaultHint').textContent = '';
+    return;
+  }
+  if (!state.econ) {
+    grid.innerHTML = '<p class="empty">Экономика недоступна.</p>';
+    return;
+  }
+
+  const items = state.econ.items || [];
+  const value = items.reduce((sum, i) => sum + i.price, 0);
+  cards.innerHTML = [
+    ['Баланс', coins(state.econ.coins)],
+    ['Предметов', items.length],
+    ['Стоимость хранилища', coins(value)],
+    ['Розыгрышей', state.econ.stats?.upgrades ?? 0],
+    ['Побед', state.econ.stats?.wins ?? 0],
+    ['Лучший выигрыш', coins(state.econ.stats?.bestWin ?? 0)],
+  ]
+    .map(([label, value2]) => `<div class="card"><div class="label">${escapeHtml(label)}</div><div class="value">${value2}</div></div>`)
+    .join('');
+
+  $('#vaultHint').textContent = items.length ? 'нажмите «в апгрейд», чтобы поставить предмет на кон' : '';
+  grid.innerHTML = items.length
+    ? items
+        .slice()
+        .sort((a, b) => b.price - a.price)
+        .map((entry) => itemCard({ ...entry.item, price: entry.price, uid: entry.uid }, { mode: 'vault' }))
+        .join('')
+    : '<p class="empty">Хранилище пусто — купите что-нибудь в каталоге.</p>';
+
+  $$('[data-sell]').forEach((btn) => {
+    btn.onclick = async (event) => {
+      event.stopPropagation();
+      try {
+        const data = await api('/api/economy/sell', { method: 'POST', body: JSON.stringify({ uid: btn.dataset.sell }) });
+        toast(`Продано за ${coins(data.refund)}`, 'ok');
+        await loadEconomy();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+
+  $$('#vaultGrid .skin').forEach((card) => {
+    card.onclick = (event) => {
+      if (event.target.closest('button')) return;
+      const uid = card.querySelector('[data-sell]')?.dataset.sell;
+      if (!uid) return;
+      state.selection = state.selection.includes(uid) ? state.selection.filter((u) => u !== uid) : [...state.selection, uid];
+      renderUpgradePicker();
+      updateChance();
+      switchTab('upgrade');
+    };
+  });
+}
+
+/* --------------------------------- магазин ------------------------------ */
+
+async function loadCategories() {
+  const { categories } = await api('/api/catalog/categories');
+  const options = categories.map((c) => `<option value="${escapeHtml(c.category)}">${escapeHtml(c.category)} (${c.count})</option>`).join('');
+  $('#skinCategory').innerHTML = `<option value="">Все категории</option>${options}`;
+  $('#targetCategory').innerHTML = `<option value="">Все категории</option>${options}`;
+}
+
+async function loadWeapons() {
+  const { weapons } = await api('/api/skins/weapons');
+  $('#skinWeapon').innerHTML =
+    '<option value="">Всё оружие</option>' +
+    weapons.map((w) => `<option value="${escapeHtml(w.weapon)}">${escapeHtml(w.weapon)} (${w.count})</option>`).join('');
+}
+
+async function loadCatalog() {
+  const params = new URLSearchParams({
+    query: $('#skinQuery').value,
+    category: $('#skinCategory').value,
+    weapon: $('#skinWeapon').value,
+    rarity: $('#skinRarity').value,
+    sort: $('#skinSort').value,
+    page: String(state.page),
+  });
+  const data = await api(`/api/catalog?${params.toString()}`);
+  $('#skinGrid').innerHTML = data.items.map((item) => itemCard(item, { inDraft: state.draft.some((d) => d.skinId === item.id) })).join('')
+    || '<p class="empty">Ничего не найдено</p>';
+
+  $('#pageLabel').textContent = `страница ${data.page} из ${data.pages} · найдено ${data.total}`;
+  $('#prevPage').disabled = data.page <= 1;
+  $('#nextPage').disabled = data.page >= data.pages;
+
+  $$('#skinGrid .skin').forEach((card) => {
+    card.onclick = (event) => {
+      if (event.target.closest('button')) return;
+      const item = { skinId: card.dataset.id, weapon: card.querySelector('.weapon').textContent.split(' · ')[0], pattern: card.querySelector('.pattern').textContent, float: null, statTrak: false };
+      const index = state.draft.findIndex((d) => d.skinId === item.skinId);
+      if (index >= 0) state.draft.splice(index, 1);
+      else state.draft.push(item);
+      renderDraft();
+      loadCatalog();
+    };
+  });
+
+  $$('[data-buy]').forEach((btn) => {
+    btn.onclick = async (event) => {
+      event.stopPropagation();
+      if (!state.user) return toast('Войдите через Steam, чтобы покупать', 'err');
+      try {
+        const data = await api('/api/economy/buy', { method: 'POST', body: JSON.stringify({ itemId: btn.dataset.buy }) });
+        toast(`Куплено: ${data.item.pattern} за ${coins(data.item.price)}`, 'ok');
+        await loadEconomy();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+}
+
+function renderDraft() {
+  const block = $('#draftBlock');
+  block.hidden = state.draft.length === 0;
+  $('#draftCount').textContent = `${state.draft.length} поз.`;
+  $('#draftList').innerHTML = state.draft
+    .map((entry, index) => `<li>${escapeHtml(entry.weapon)} — ${escapeHtml(entry.pattern)} <button data-index="${index}" title="убрать">×</button></li>`)
+    .join('');
+  $$('#draftList button').forEach((btn) => {
+    btn.onclick = () => {
+      state.draft.splice(Number(btn.dataset.index), 1);
+      renderDraft();
+      loadCatalog();
+    };
+  });
+}
+
+/* -------------------------------- апгрейд ------------------------------- */
+
+function renderUpgradePicker() {
+  const box = $('#upgradePicker');
+  const items = state.econ?.items || [];
+  if (!state.user) {
+    box.innerHTML = '<p class="empty">Войдите через Steam, чтобы играть.</p>';
+    $('#stakeLabel').textContent = '';
+    return;
+  }
+  if (!items.length) {
+    box.innerHTML = '<p class="empty">Купите предметы в каталоге — ими можно играть в апгрейд.</p>';
+    $('#stakeLabel').textContent = '';
+    return;
+  }
+  state.selection = state.selection.filter((uid) => items.some((i) => i.uid === uid));
+  const stake = items.filter((i) => state.selection.includes(i.uid)).reduce((sum, i) => sum + i.price, 0);
+  $('#stakeLabel').textContent = `выбрано ${state.selection.length} на ${coins(stake)}`;
+
+  box.innerHTML = items
+    .slice()
+    .sort((a, b) => b.price - a.price)
+    .map((entry) => {
+      const checked = state.selection.includes(entry.uid) ? 'checked' : '';
+      return `<label class="pick ${checked ? 'picked' : ''}" data-rarity="${escapeHtml(entry.item.rarity)}">
+        <input type="checkbox" data-pick="${escapeHtml(entry.uid)}" ${checked} />
+        <span class="pick-icon">${CATEGORY_ICON[entry.item.category] || '🎁'}</span>
+        <span class="pick-name">${escapeHtml(entry.item.weapon)} — ${escapeHtml(entry.item.pattern)}</span>
+        <span class="price">${coins(entry.price)}</span>
+      </label>`;
+    })
+    .join('');
+
+  $$('[data-pick]').forEach((input) => {
+    input.onchange = () => {
+      const uid = input.dataset.pick;
+      state.selection = input.checked ? [...state.selection, uid] : state.selection.filter((u) => u !== uid);
+      renderUpgradePicker();
+      updateChance();
+    };
+  });
+}
+
+async function loadTargets() {
+  const params = new URLSearchParams({
+    query: $('#targetQuery').value,
+    category: $('#targetCategory').value,
+    rarity: $('#targetRarity').value,
+    sort: $('#targetSort').value,
+    page: String(state.targetPage),
+    pageSize: '12',
+  });
+  const data = await api(`/api/catalog?${params.toString()}`);
+  $('#targetGrid').innerHTML = data.items
+    .map((item) => itemCard(item, { mode: 'target', selected: state.target?.id === item.id }))
+    .join('') || '<p class="empty">Ничего не найдено</p>';
+
+  $('#targetPageLabel').textContent = `страница ${data.page} из ${data.pages}`;
+  $('#targetPrev').disabled = data.page <= 1;
+  $('#targetNext').disabled = data.page >= data.pages;
+
+  $$('[data-target]').forEach((btn) => {
+    btn.onclick = async (event) => {
+      event.stopPropagation();
+      const { items } = await api(`/api/catalog?query=${encodeURIComponent(btn.dataset.target)}&pageSize=1`);
+      const found = items.find((i) => i.id === btn.dataset.target);
+      if (!found) return toast('Предмет не найден', 'err');
+      state.target = found;
+      loadTargets();
+      updateChance();
+    };
+  });
+}
+
+async function updateChance() {
+  const fill = $('#chanceFill');
+  const summary = $('#upgradeSummary');
+  const spin = $('#spinBtn');
+
+  if (!state.target) {
+    summary.innerHTML = '<span class="muted">Выберите цель апгрейда ↑</span>';
+    fill.style.width = '0%';
+    $('#chanceText').textContent = '0%';
+    spin.disabled = true;
+    return;
+  }
+
+  const targetPrice = state.target.price;
+  const stake = (state.econ?.items || []).filter((i) => state.selection.includes(i.uid)).reduce((sum, i) => sum + i.price, 0);
+  const rough = stake ? Math.min(95, Math.max(1, Math.round((stake / targetPrice) * 100 * (state.config?.economy?.edge ?? 0.95)))) : 0;
+
+  if (!state.selection.length) {
+    summary.innerHTML = `<span class="muted">Цель: <b>${escapeHtml(state.target.pattern)}</b> · ${coins(targetPrice)} · поставьте предметы слева</span>`;
+    fill.style.width = '0%';
+    $('#chanceText').textContent = '0%';
+    spin.disabled = true;
+    return;
+  }
+
+  try {
+    const data = await api('/api/upgrade/preview', {
+      method: 'POST',
+      body: JSON.stringify({ uids: state.selection, targetItemId: state.target.id }),
+    });
+    state.chance = data.chance;
+    const percent = data.chance * 100;
+    fill.style.width = `${Math.min(100, percent)}%`;
+    $('#chanceText').textContent = `${percent.toFixed(percent < 10 ? 2 : 1)}%`;
+    const lossNote = data.stake > data.payout ? ' <span class="warn">ставка дороже цели</span>' : '';
+    summary.innerHTML = `Ставка <b>${coins(data.stake)}</b> → цель <b>${escapeHtml(data.target.pattern)}</b> (${coins(data.payout)})${lossNote}`;
+    spin.disabled = state.spinning || data.stake <= 0;
+  } catch (error) {
+    state.chance = rough / 100;
+    $('#chanceText').textContent = `${rough}%`;
+    summary.innerHTML = `<span class="muted">${escapeHtml(error.message)}</span>`;
+    spin.disabled = true;
+  }
+}
+
+function buildReel(cells, winIndex, loops = 3) {
+  const track = $('#reelTrack');
+  const strip = [];
+  for (let l = 0; l < loops + 1; l += 1) strip.push(...cells);
+  track.innerHTML = strip
+    .map((cell) => `<div class="reel-cell ${cell.isWin ? 'win' : ''}" data-rarity="${escapeHtml(cell.rarity)}">
+        <div class="reel-art">${CATEGORY_ICON[cell.category] || '🎁'}</div>
+        <div class="reel-name">${escapeHtml(cell.pattern)}</div>
+        <div class="reel-price">${coins(cell.price)}</div>
+      </div>`)
+    .join('');
+
+  const viewportW = $('#reelViewport').clientWidth || 800;
+  const finalIndex = loops * cells.length + winIndex;
+  const offset = finalIndex * CELL_STEP - (viewportW / 2 - CELL_W / 2) + (Math.random() * 60 - 30);
+
+  track.style.transition = 'none';
+  track.style.transform = 'translateX(0px)';
+  requestAnimationFrame(() => {
+    track.style.transition = 'transform 5.5s cubic-bezier(0.1, 0.72, 0.02, 1)';
+    track.style.transform = `translateX(${-offset}px)`;
+  });
+}
+
+async function spin() {
+  if (state.spinning || !state.target || !state.selection.length) return;
+  state.spinning = true;
+  $('#spinBtn').disabled = true;
+  $('#resultBox').hidden = true;
+
+  try {
+    const data = await api('/api/upgrade/play', {
+      method: 'POST',
+      body: JSON.stringify({ uids: state.selection, targetItemId: state.target.id }),
+    });
+    buildReel(data.reel, data.winIndex);
+    state.selection = [];
+
+    setTimeout(async () => {
+      $('#resultBox').hidden = false;
+      $('#resultBox').className = `result ${data.win ? 'win' : 'lose'}`;
+      $('#resultBox').innerHTML = `
+        <div class="result-title">${data.win ? '🎉 Апгрейд прошёл!' : '😢 Не повезло'}</div>
+        <div class="result-body">
+          Цель: <b>${escapeHtml(data.target.pattern)}</b> · шанс ${(data.chance * 100).toFixed(2)}% ·
+          ставка ${coins(data.stake)} · roll ${data.roll.toFixed(6)}
+          ${data.win ? `→ выигрыш ${coins(data.payout)}` : `→ ставка ${coins(data.stake)} сгорела`}
+        </div>
+        <button class="btn btn-sm" id="againBtn">ещё раз</button>`;
+      $('#againBtn').onclick = () => { $('#resultBox').hidden = true; };
+
+      $('#fairBox').innerHTML = [
+        ['serverSeed (hash)', data.fair.serverSeedHash],
+        ['clientSeed', data.fair.clientSeed],
+        ['nonce', data.fair.nonce],
+        ['roll', data.roll.toFixed(8)],
+      ]
+        .map(([k, v]) => `<li><span class="muted">${escapeHtml(k)}</span><span class="mono">${escapeHtml(String(v))}</span></li>`)
+        .join('');
+
+      await loadEconomy();
+      loadHistory();
+      if (state.user?.isAdmin) loadAdmin();
+      state.spinning = false;
+      updateChance();
+    }, 5700);
+  } catch (error) {
+    state.spinning = false;
+    toast(error.message, 'err');
+    updateChance();
+  }
+}
+
+async function loadHistory() {
+  try {
+    const { history } = await api('/api/upgrade/history');
+    $('#historyFeed').innerHTML = history.length
+      ? history
+          .map((h) => `<div class="hist-row ${h.win ? 'win' : 'lose'}">
+              <span class="mono">${new Date(h.at).toLocaleTimeString('ru-RU')}</span>
+              <span class="hist-name">${CATEGORY_ICON[h.target.category] || '🎁'} ${escapeHtml(h.target.pattern)}</span>
+              <span class="muted">${(h.chance * 100).toFixed(1)}%</span>
+              <span>${coins(h.stake)} → ${h.win ? coins(h.payout) : '0'}</span>
+              <span class="hist-badge">${h.win ? 'WIN' : 'LOSE'}</span>
+            </div>`)
+          .join('')
+      : '<p class="empty">Розыгрышей пока не было.</p>';
+  } catch {
+    $('#historyFeed').innerHTML = '';
+  }
+}
+
+/* -------------------------------- сборки -------------------------------- */
+
+async function renderLoadouts() {
+  const mine = $('#myLoadouts');
+  if (!state.user) {
+    mine.innerHTML = '<p class="empty">Войдите через Steam, чтобы сохранять сборки.</p>';
+  } else {
+    try {
+      const { loadouts } = await api('/api/loadout');
+      mine.innerHTML = loadouts.length
+        ? loadouts.map((l) => loadoutCard(l, true)).join('')
+        : '<p class="empty">Сборок пока нет — соберите их на вкладке «Каталог».</p>';
+      $$('[data-loadout-del]').forEach((btn) => {
+        btn.onclick = async () => {
+          await api(`/api/loadout/${btn.dataset.loadoutDel}`, { method: 'DELETE' });
+          toast('Сборка удалена', 'ok');
+          renderLoadouts();
+        };
+      });
+    } catch (error) {
+      mine.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+    }
+  }
+
+  try {
+    const { loadouts: publicOnes } = await api('/api/loadout/public');
+    $('#publicLoadouts').innerHTML = publicOnes.length
+      ? publicOnes.map((l) => loadoutCard(l, false)).join('')
+      : '<p class="empty">Пока никто не опубликовал сборку.</p>';
+  } catch {
+    $('#publicLoadouts').innerHTML = '';
+  }
+}
+
+function loadoutCard(loadout, mine) {
+  const items = loadout.entries
+    .map((e) => `<li>${escapeHtml(e.weapon)} — ${escapeHtml(e.pattern)}${e.statTrak ? ' (ST)' : ''}</li>`)
+    .join('');
+  return `<div class="loadout">
+    <h3>${escapeHtml(loadout.name)}${loadout.public ? ' <span class="badge">публичная</span>' : ''}</h3>
+    <div class="mono">${escapeHtml(loadout.steamId || '')} · обновлено ${new Date(loadout.updatedAt).toLocaleString('ru-RU')}</div>
+    <ul>${items || '<li class="muted">пусто</li>'}</ul>
+    <div class="loadout-foot">
+      <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://steamcommunity.com/profiles/${escapeHtml(loadout.steamId)}">профиль Steam</a>
+      ${mine ? `<button class="btn btn-ghost btn-sm btn-danger" data-loadout-del="${escapeHtml(loadout.id)}">удалить</button>` : ''}
+    </div>
+  </div>`;
+}
+
+/* -------------------------------- сервер -------------------------------- */
 
 async function loadServers() {
   if (!state.user?.isAdmin) return;
@@ -225,8 +699,6 @@ function logConsole(command, output) {
   box.scrollTop = box.scrollHeight;
 }
 
-/* -------------------------------- console ------------------------------- */
-
 async function runConsole(command, confirmNeeded = false) {
   try {
     const data = await api('/api/console', {
@@ -244,128 +716,144 @@ async function runConsole(command, confirmNeeded = false) {
   }
 }
 
-/* --------------------------------- skins -------------------------------- */
+/* -------------------------------- админка ------------------------------- */
 
-async function loadWeapons() {
-  const { weapons } = await api('/api/skins/weapons');
-  $('#skinWeapon').innerHTML =
-    '<option value="">Всё оружие</option>' +
-    weapons.map((w) => `<option value="${escapeHtml(w.weapon)}">${escapeHtml(w.weapon)} (${w.count})</option>`).join('');
-}
-
-async function loadSkins() {
-  const params = new URLSearchParams({
-    query: $('#skinQuery').value,
-    weapon: $('#skinWeapon').value,
-    rarity: $('#skinRarity').value,
-    sort: $('#skinSort').value,
-    page: String(state.page),
-  });
-  const data = await api(`/api/skins?${params.toString()}`);
-  $('#skinGrid').innerHTML = data.items
-    .map((skin) => {
-      const inDraft = state.draft.some((d) => d.skinId === skin.id);
-      const float = skin.float ? `износ ${skin.float[0]}–${skin.float[1]}` : 'износ —';
-      return `<div class="skin ${inDraft ? 'in-draft' : ''}" data-rarity="${escapeHtml(skin.rarity)}" data-id="${escapeHtml(skin.id)}" data-weapon="${escapeHtml(skin.weapon)}" data-pattern="${escapeHtml(skin.pattern)}">
-        <div class="weapon">${escapeHtml(skin.weapon)} · ${escapeHtml(skin.category)}</div>
-        <div class="pattern">${escapeHtml(skin.pattern)}</div>
-        <div class="meta"><span class="rarity">${escapeHtml(skin.rarity)}</span><span>${escapeHtml(float)}</span></div>
-      </div>`;
-    })
-    .join('') || '<p class="empty">Ничего не найдено</p>';
-
-  $('#pageLabel').textContent = `страница ${data.page} из ${data.pages} · найдено ${data.total}`;
-  $('#prevPage').disabled = data.page <= 1;
-  $('#nextPage').disabled = data.page >= data.pages;
-
-  $$('.skin').forEach((card) => {
-    card.onclick = () => {
-      const entry = {
-        skinId: card.dataset.id,
-        weapon: card.dataset.weapon,
-        pattern: card.dataset.pattern,
-        float: null,
-        statTrak: false,
-      };
-      const index = state.draft.findIndex((d) => d.skinId === entry.skinId);
-      if (index >= 0) state.draft.splice(index, 1);
-      else state.draft.push(entry);
-      renderDraft();
-      loadSkins();
-    };
-  });
-}
-
-function renderDraft() {
-  const block = $('#draftBlock');
-  block.hidden = state.draft.length === 0;
-  $('#draftCount').textContent = `${state.draft.length} поз.`;
-  $('#draftList').innerHTML = state.draft
-    .map((entry, index) => `<li>${escapeHtml(entry.weapon)} — ${escapeHtml(entry.pattern)} <button data-index="${index}" title="убрать">×</button></li>`)
-    .join('');
-  $$('#draftList button').forEach((btn) => {
-    btn.onclick = () => {
-      state.draft.splice(Number(btn.dataset.index), 1);
-      renderDraft();
-      loadSkins();
-    };
-  });
-}
-
-/* -------------------------------- loadouts ------------------------------ */
-
-async function renderLoadouts() {
-  const mine = $('#myLoadouts');
-  if (!state.user) {
-    mine.innerHTML = '<p class="empty">Войдите через Steam, чтобы сохранять сборки.</p>';
-  } else {
-    try {
-      const { loadouts } = await api('/api/loadout');
-      mine.innerHTML = loadouts.length
-        ? loadouts.map((l) => loadoutCard(l, true)).join('')
-        : '<p class="empty">Сборок пока нет — соберите их на вкладке «Скины».</p>';
-      $$('[data-loadout-del]').forEach((btn) => {
-        btn.onclick = async () => {
-          await api(`/api/loadout/${btn.dataset.loadoutDel}`, { method: 'DELETE' });
-          toast('Сборка удалена', 'ok');
-          renderLoadouts();
-        };
-      });
-    } catch (error) {
-      mine.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
-    }
+async function loadAdmin() {
+  if (!state.user?.isAdmin) return;
+  try {
+    const stats = await api('/api/admin/stats');
+    $('#adminCards').innerHTML = [
+      ['Игроков', stats.users],
+      ['Монет в обороте', coins(stats.coinsInCirculation)],
+      ['Предметов в хранилищах', stats.itemsInVaults],
+      ['Розыгрышей', stats.upgrades],
+      ['Побед', stats.wins],
+      ['RTP (выплачено / ставки)', `${Math.round((stats.rtp || 0) * 100)}%`],
+      ['Ставок всего', coins(stats.wagered)],
+      ['Выплачено', coins(stats.paid)],
+    ]
+      .map(([label, value]) => `<div class="card"><div class="label">${escapeHtml(label)}</div><div class="value">${value}</div></div>`)
+      .join('');
+  } catch (error) {
+    $('#adminCards').innerHTML = '';
   }
 
-  const { loadouts: publicOnes } = await api('/api/loadout/public');
-  $('#publicLoadouts').innerHTML = publicOnes.length
-    ? publicOnes.map((l) => loadoutCard(l, false)).join('')
-    : '<p class="empty">Пока никто не опубликовал сборку.</p>';
+  try {
+    const { users } = await api('/api/admin/users');
+    $('#adminUsers tbody').innerHTML = users
+      .map((u) => `<tr>
+          <td class="mono"><a target="_blank" rel="noopener" href="https://steamcommunity.com/profiles/${escapeHtml(u.steamId)}">${escapeHtml(u.steamId)}</a></td>
+          <td>${Number(u.coins).toLocaleString('ru-RU')}</td>
+          <td>${u.items}</td>
+          <td>${u.upgrades} / ${u.wins}</td>
+          <td>${Number(u.wagered).toLocaleString('ru-RU')}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" data-grant="${escapeHtml(u.steamId)}" data-amount="1000">+1000</button>
+            <button class="btn btn-ghost btn-sm" data-grant="${escapeHtml(u.steamId)}" data-amount="-1000">−1000</button>
+            <button class="btn btn-ghost btn-sm ${u.banned ? '' : 'btn-danger'}" data-ban="${escapeHtml(u.steamId)}" data-banned="${u.banned ? '0' : '1'}">${u.banned ? 'разбанить' : 'бан'}</button>
+          </td>
+        </tr>`)
+      .join('') || '<tr><td colspan="6" class="empty">Пользователей пока нет</td></tr>';
+
+    $$('[data-grant]').forEach((btn) => {
+      btn.onclick = async () => {
+        await api('/api/admin/coins', {
+          method: 'POST',
+          body: JSON.stringify({ steamId: btn.dataset.grant, amount: Number(btn.dataset.amount) }),
+        });
+        toast('Баланс обновлён', 'ok');
+        loadAdmin();
+      };
+    });
+    $$('[data-ban]').forEach((btn) => {
+      btn.onclick = async () => {
+        await api('/api/admin/ban', {
+          method: 'POST',
+          body: JSON.stringify({ steamId: btn.dataset.ban, banned: btn.dataset.banned === '1' }),
+        });
+        toast('Статус обновлён', 'ok');
+        loadAdmin();
+      };
+    });
+  } catch {
+    $('#adminUsers tbody').innerHTML = '';
+  }
+
+  try {
+    const { custom, overrides } = await api('/api/admin/items');
+    const rows = [
+      ...custom.map((i) => ({ id: i.id, label: `${i.weapon} — ${i.pattern}`, price: i.price, kind: 'свой' })),
+      ...Object.entries(overrides)
+        .filter(([, o]) => o.price || o.hidden)
+        .map(([id, o]) => ({ id, label: id, price: o.price || '—', kind: o.hidden ? 'скрыт' : 'правка цены' })),
+    ];
+    $('#adminItems').innerHTML = rows.length
+      ? rows
+          .map((r) => `<div class="loadout">
+              <h3>${escapeHtml(r.label)}</h3>
+              <div class="mono">${escapeHtml(r.id)} · ${escapeHtml(String(r.price))} 🪙 · ${escapeHtml(r.kind)}</div>
+              <div class="loadout-foot" style="margin-top:10px">
+                <button class="btn btn-ghost btn-sm btn-danger" data-item-del="${escapeHtml(r.id)}">убрать</button>
+              </div>
+            </div>`)
+          .join('')
+      : '<p class="empty">Правок каталога нет.</p>';
+
+    $$('[data-item-del]').forEach((btn) => {
+      btn.onclick = async () => {
+        await api(`/api/admin/items/${encodeURIComponent(btn.dataset.itemDel)}`, { method: 'DELETE' });
+        toast('Каталог обновлён', 'ok');
+        loadAdmin();
+        loadCatalog();
+      };
+    });
+  } catch {
+    $('#adminItems').innerHTML = '';
+  }
+
+  try {
+    const { history } = await api('/api/admin/history');
+    $('#adminHistory tbody').innerHTML = history
+      .map((h) => `<tr>
+          <td class="mono">${new Date(h.at).toLocaleString('ru-RU')}</td>
+          <td class="mono">${escapeHtml(h.steamId.slice(-6))}</td>
+          <td>${escapeHtml(h.target.pattern)}</td>
+          <td>${coins(h.stake)}</td>
+          <td>${(h.chance * 100).toFixed(1)}%</td>
+          <td><span class="hist-badge ${h.win ? 'win' : 'lose'}">${h.win ? 'WIN' : 'LOSE'}</span></td>
+        </tr>`)
+      .join('') || '<tr><td colspan="6" class="empty">История пуста</td></tr>';
+  } catch {
+    $('#adminHistory tbody').innerHTML = '';
+  }
 }
 
-function loadoutCard(loadout, mine) {
-  const items = loadout.entries
-    .map((e) => `<li>${escapeHtml(e.weapon)} — ${escapeHtml(e.pattern)}${e.statTrak ? ' (ST)' : ''}</li>`)
-    .join('');
-  return `<div class="loadout">
-    <h3>${escapeHtml(loadout.name)}${loadout.public ? ' <span class="badge">публичная</span>' : ''}</h3>
-    <div class="mono">${escapeHtml(loadout.steamId || '')} · обновлено ${new Date(loadout.updatedAt).toLocaleString('ru-RU')}</div>
-    <ul>${items || '<li class="muted">пусто</li>'}</ul>
-    <div class="loadout-foot">
-      <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://steamcommunity.com/profiles/${escapeHtml(loadout.steamId)}">профиль Steam</a>
-      ${mine ? `<button class="btn btn-ghost btn-sm btn-danger" data-loadout-del="${escapeHtml(loadout.id)}">удалить</button>` : ''}
-    </div>
-  </div>`;
-}
+/* ---------------------------------- UI ---------------------------------- */
 
-/* --------------------------------- init --------------------------------- */
+function switchTab(name) {
+  $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  $$('.panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${name}`));
+}
 
 function bindUi() {
   $$('.tab').forEach((tab) => {
     tab.onclick = () => {
-      $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-      $$('.panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${tab.dataset.tab}`));
+      switchTab(tab.dataset.tab);
+      if (tab.dataset.tab === 'admin') loadAdmin();
+      if (tab.dataset.tab === 'vault') loadEconomy();
+      if (tab.dataset.tab === 'upgrade') { loadEconomy(); loadTargets(); loadHistory(); }
     };
   });
+
+  $('#dailyBtn').onclick = async () => {
+    try {
+      const data = await api('/api/economy/daily', { method: 'POST' });
+      toast(`Бонус начислен: ${coins(state.econ ? data.coins - state.econ.coins : data.coins)}`, 'ok');
+      await loadEconomy();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
 
   $('#refreshBtn').onclick = refreshStatus;
   $('#serverSelect').onchange = (event) => {
@@ -397,13 +885,31 @@ function bindUi() {
     if (command) runConsole(command);
   };
 
-  const reloadSkins = () => { state.page = 1; loadSkins(); };
-  $('#skinQuery').oninput = reloadSkins;
-  $('#skinWeapon').onchange = reloadSkins;
-  $('#skinRarity').onchange = reloadSkins;
-  $('#skinSort').onchange = reloadSkins;
-  $('#prevPage').onclick = () => { state.page = Math.max(1, state.page - 1); loadSkins(); };
-  $('#nextPage').onclick = () => { state.page += 1; loadSkins(); };
+  const reloadCatalog = () => { state.page = 1; loadCatalog(); };
+  $('#skinQuery').oninput = reloadCatalog;
+  $('#skinCategory').onchange = reloadCatalog;
+  $('#skinWeapon').onchange = reloadCatalog;
+  $('#skinRarity').onchange = reloadCatalog;
+  $('#skinSort').onchange = reloadCatalog;
+  $('#prevPage').onclick = () => { state.page = Math.max(1, state.page - 1); loadCatalog(); };
+  $('#nextPage').onclick = () => { state.page += 1; loadCatalog(); };
+
+  const reloadTargets = () => { state.targetPage = 1; loadTargets(); };
+  $('#targetQuery').oninput = reloadTargets;
+  $('#targetCategory').onchange = reloadTargets;
+  $('#targetRarity').onchange = reloadTargets;
+  $('#targetSort').onchange = reloadTargets;
+  $('#targetPrev').onclick = () => { state.targetPage = Math.max(1, state.targetPage - 1); loadTargets(); };
+  $('#targetNext').onclick = () => { state.targetPage += 1; loadTargets(); };
+
+  $('#spinBtn').onclick = spin;
+  $('#clearSelection').onclick = () => { state.selection = []; renderUpgradePicker(); updateChance(); };
+  $('#selectCheap').onclick = () => {
+    const cheap = (state.econ?.items || []).slice().sort((a, b) => a.price - b.price).slice(0, 5).map((i) => i.uid);
+    state.selection = cheap;
+    renderUpgradePicker();
+    updateChance();
+  };
 
   $('#saveLoadout').onclick = async () => {
     if (!state.user) return toast('Сначала войдите через Steam', 'err');
@@ -417,7 +923,7 @@ function bindUi() {
       state.draft = [];
       $('#loadoutName').value = '';
       renderDraft();
-      loadSkins();
+      loadCatalog();
       renderLoadouts();
     } catch (error) {
       toast(error.message, 'err');
@@ -444,6 +950,29 @@ function bindUi() {
       toast(error.message, 'err');
     }
   };
+
+  $('#adminItemForm').onsubmit = async (event) => {
+    event.preventDefault();
+    try {
+      await api('/api/admin/items', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: $('#aiId').value,
+          weapon: $('#aiWeapon').value,
+          pattern: $('#aiPattern').value,
+          category: $('#aiCategory').value || 'Прочее',
+          rarity: $('#aiRarity').value,
+          price: Number($('#aiPrice').value),
+        }),
+      });
+      toast('Предмет добавлен в каталог', 'ok');
+      $('#adminItemForm').reset();
+      loadAdmin();
+      loadCatalog();
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
 }
 
 (async function main() {
@@ -451,12 +980,18 @@ function bindUi() {
   try {
     await loadSession();
     await loadConfig();
+    await loadCategories();
     await loadWeapons();
-    await loadSkins();
+    await loadCatalog();
+    await loadEconomy();
+    await loadTargets();
+    await loadHistory();
     await loadServers();
     await renderLoadouts();
+    await loadAdmin();
   } catch (error) {
     toast(error.message, 'err');
   }
   setInterval(() => { if (state.user?.isAdmin) refreshStatus(); }, 15000);
+  setInterval(() => { if (state.user) loadEconomy(); }, 30000);
 })();

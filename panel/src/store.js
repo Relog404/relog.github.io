@@ -10,6 +10,10 @@ const emptyStore = () => ({
   servers: [],
   loadouts: {}, // { [steamId]: [ {id, name, public, entries, createdAt, updatedAt} ] }
   profiles: {}, // { [steamId]: { name, avatar, updatedAt } } — кэш Steam-профилей
+  economy: {}, // { [steamId]: { coins, items, seeds, stats, ... } } — виртуальные монеты и хранилище
+  history: [], // последние розыгрыши апгрейда
+  customItems: [], // предметы, добавленные админом через админку
+  catalogOverrides: {}, // { [itemId]: { price?, hidden? } }
 });
 
 let cache = null;
@@ -206,4 +210,75 @@ export function rememberProfile(steamId, { name, avatar }) {
 
 export function getProfile(steamId) {
   return load().profiles[String(steamId)] || null;
+}
+
+/* ------------------------ экономика (виртуальные монеты) --------------- */
+
+export function getEconomy(steamId) {
+  const store = load();
+  store.economy = store.economy || {};
+  const key = String(steamId);
+  if (!store.economy[key]) store.economy[key] = {};
+  return store.economy[key];
+}
+
+export function saveEconomy(steamId, patch) {
+  const store = load();
+  store.economy = store.economy || {};
+  store.economy[String(steamId)] = patch;
+  save();
+}
+
+export function allEconomy() {
+  return load().economy || {};
+}
+
+/* --------------------- витрина: правки админки ------------------------- */
+
+export function getCustomItems() {
+  return load().customItems || [];
+}
+
+export function getCatalogOverrides() {
+  return load().catalogOverrides || {};
+}
+
+export function upsertCustomItem(item) {
+  const store = load();
+  const list = store.customItems || (store.customItems = []);
+  const index = list.findIndex((i) => i.id === item.id);
+  if (index >= 0) list[index] = { ...list[index], ...item };
+  else list.push(item);
+  save();
+  return list[index >= 0 ? index : list.length - 1];
+}
+
+export function setCatalogOverride(id, patch) {
+  const store = load();
+  store.catalogOverrides = store.catalogOverrides || {};
+  store.catalogOverrides[id] = { ...(store.catalogOverrides[id] || {}), ...patch };
+  save();
+  return store.catalogOverrides[id];
+}
+
+export function removeCustomItem(id) {
+  const store = load();
+  store.customItems = (store.customItems || []).filter((i) => i.id !== id);
+  delete (store.catalogOverrides || {})[id];
+  save();
+  return true;
+}
+
+/* ------------------------- история розыгрышей -------------------------- */
+
+export function pushHistory(entry, limit = 200) {
+  const store = load();
+  store.history = store.history || [];
+  store.history.unshift(entry);
+  store.history = store.history.slice(0, limit);
+  save();
+}
+
+export function getHistory(limit = 20) {
+  return (load().history || []).slice(0, limit);
 }

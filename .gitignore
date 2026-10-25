@@ -5,7 +5,7 @@ npm-debug.log*
 # Веб-панель: локальные настройки и пользовательские данные
 panel/.env
 panel/data/store.json
-panel/data/skins.json
+panel/data/catalog.json
 
 # Результаты установки CS2 (не коммитим бинарники игры)
 cs2-server/steamcmd/

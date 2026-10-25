@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CS2 Panel — управление сервером и каталог скинов</title>
+  <title>CS2 Panel — сервер, каталог скинов, апгрейд</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>" />
 </head>
@@ -13,11 +13,16 @@
       <span class="logo">CS2</span>
       <div>
         <h1>CS2 Panel</h1>
-        <p class="muted">Управление выделенным сервером · каталог скинов · сборки по Steam</p>
+        <p class="muted">Сервер · каталог скинов · апгрейд · магазин</p>
       </div>
     </div>
 
     <div class="topbar-right">
+      <div class="wallet" id="wallet" hidden>
+        <span class="coin">🪙</span>
+        <span class="wallet-coins" id="coinBalance">0</span>
+        <button class="btn btn-sm" id="dailyBtn" title="Ежедневный бонус виртуальными монетами">бонус</button>
+      </div>
       <label class="server-select" id="serverSelectWrap" hidden>
         <span>Сервер</span>
         <select id="serverSelect"></select>
@@ -26,18 +31,175 @@
     </div>
   </header>
 
+  <div class="disclaimer">
+    Монеты виртуальные: их нельзя купить за деньги, пополнить предметами из Steam или вывести наружу.
+    Никаких реальных ставок — только игра на фановую валюту. Скинченджеров и читов в проекте нет.
+  </div>
+
   <nav class="tabs" id="tabs">
-    <button class="tab active" data-tab="server">Сервер</button>
-    <button class="tab" data-tab="skins">Скины</button>
+    <button class="tab" data-tab="upgrade">Апгрейд</button>
+    <button class="tab active" data-tab="shop">Каталог</button>
+    <button class="tab" data-tab="vault">Хранилище</button>
     <button class="tab" data-tab="loadouts">Мои сборки</button>
+    <button class="tab" data-tab="server">Сервер</button>
+    <button class="tab admin-only" data-tab="admin" hidden>Админка</button>
     <button class="tab admin-only" data-tab="settings" hidden>Настройки</button>
   </nav>
 
   <main>
-    <!-- ------------------------------- СЕРВЕР ------------------------------- -->
-    <section class="panel active" id="tab-server">
-      <div id="statusPill" class="pill pill-warn">загрузка…</div>
+    <!-- ------------------------------ АПГРЕЙД ------------------------------ -->
+    <section class="panel active" id="tab-upgrade">
+      <div class="upgrade-shell">
+        <div class="block upgrade-left">
+          <h2>Ваши предметы <span class="muted small" id="stakeLabel"></span></h2>
+          <div class="vault-picker" id="upgradePicker"></div>
+          <div class="row">
+            <button class="btn btn-ghost btn-sm" id="selectCheap">выбрать дешёвые</button>
+            <button class="btn btn-ghost btn-sm" id="clearSelection">сбросить выбор</button>
+          </div>
+        </div>
 
+        <div class="block upgrade-right">
+          <h2>Цель апгрейда</h2>
+          <div class="filters">
+            <input id="targetQuery" type="search" placeholder="Поиск цели: Karambit, медаль, AWP…" />
+            <select id="targetCategory"><option value="">Все категории</option></select>
+            <select id="targetRarity">
+              <option value="">Любая редкость</option>
+              <option value="exceedingly rare">Exceedingly Rare</option>
+              <option value="covert">Covert</option>
+              <option value="classified">Classified</option>
+              <option value="restricted">Restricted</option>
+              <option value="mil-spec">Mil-Spec</option>
+              <option value="industrial">Industrial</option>
+              <option value="consumer">Consumer</option>
+            </select>
+            <select id="targetSort">
+              <option value="price-desc">Сначала дорогие</option>
+              <option value="price-asc">Сначала дешёвые</option>
+              <option value="rarity">По редкости</option>
+              <option value="name">По названию</option>
+            </select>
+          </div>
+          <div class="target-grid" id="targetGrid"></div>
+          <div class="pager">
+            <button class="btn btn-ghost btn-sm" id="targetPrev">←</button>
+            <span id="targetPageLabel" class="muted small"></span>
+            <button class="btn btn-ghost btn-sm" id="targetNext">→</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="block roulette-block">
+        <div class="chance-row">
+          <div class="chance-meter">
+            <div class="chance-fill" id="chanceFill" style="width:0%"></div>
+            <span class="chance-text" id="chanceText">0%</span>
+          </div>
+          <div class="upgrade-summary" id="upgradeSummary"></div>
+          <button class="btn btn-spin" id="spinBtn" disabled>Крутить</button>
+        </div>
+
+        <div class="reel">
+          <div class="reel-marker"></div>
+          <div class="reel-viewport" id="reelViewport">
+            <div class="reel-track" id="reelTrack"></div>
+          </div>
+        </div>
+
+        <div class="result" id="resultBox" hidden></div>
+
+        <details class="fair">
+          <summary>Честность розыгрыша (provably fair)</summary>
+          <ul class="kv" id="fairBox"></ul>
+          <p class="muted small">
+            Исход считается на сервере как <code>HMAC_SHA256(serverSeed, "clientSeed:nonce")</code>.
+            Хеш серверного сида публикуется заранее, сид раскрывается при смене clientSeed —
+            результат можно пересчитать вручную.
+          </p>
+        </details>
+      </div>
+
+      <div class="block">
+        <h2>Последние розыгрыши</h2>
+        <div class="history" id="historyFeed"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------ КАТАЛОГ ------------------------------ -->
+    <section class="panel" id="tab-shop">
+      <div class="filters">
+        <input id="skinQuery" type="search" placeholder="Поиск: AWP, Asiimov, Karambit, медаль…" />
+        <select id="skinCategory"><option value="">Все категории</option></select>
+        <select id="skinWeapon"><option value="">Всё оружие</option></select>
+        <select id="skinRarity">
+          <option value="">Любая редкость</option>
+          <option value="exceedingly rare">Exceedingly Rare</option>
+          <option value="covert">Covert</option>
+          <option value="classified">Classified</option>
+          <option value="restricted">Restricted</option>
+          <option value="mil-spec">Mil-Spec</option>
+          <option value="industrial">Industrial</option>
+          <option value="consumer">Consumer</option>
+        </select>
+        <select id="skinSort">
+          <option value="rarity">Сортировка: редкость</option>
+          <option value="price-desc">Сортировка: цена ↓</option>
+          <option value="price-asc">Сортировка: цена ↑</option>
+          <option value="name">Сортировка: название</option>
+          <option value="weapon">Сортировка: оружие</option>
+        </select>
+      </div>
+
+      <p class="notice">
+        Каталог — витрина и вишлист. Панель <b>не меняет</b> ничего в игровом клиенте:
+        никаких скинченджеров, никаких правок файлов CS2, только покупки за виртуальные монеты внутри сайта.
+      </p>
+
+      <div class="skins" id="skinGrid"></div>
+      <div class="pager">
+        <button class="btn btn-ghost btn-sm" id="prevPage">←</button>
+        <span id="pageLabel" class="muted small"></span>
+        <button class="btn btn-ghost btn-sm" id="nextPage">→</button>
+      </div>
+
+      <div class="block sticky-draft" id="draftBlock" hidden>
+        <h2>Черновик сборки <span class="muted small" id="draftCount"></span></h2>
+        <ul class="draft-list" id="draftList"></ul>
+        <div class="row">
+          <input id="loadoutName" type="text" placeholder="Название сборки" maxlength="80" />
+          <label class="checkbox"><input type="checkbox" id="loadoutPublic" /> публичная</label>
+          <button class="btn" id="saveLoadout">Сохранить по SteamID</button>
+        </div>
+        <p class="muted small" id="draftHint">Войдите через Steam, чтобы сохранять сборки.</p>
+      </div>
+    </section>
+
+    <!-- ---------------------------- ХРАНИЛИЩЕ ----------------------------- -->
+    <section class="panel" id="tab-vault">
+      <div class="cards" id="vaultCards"></div>
+      <div class="block">
+        <h2>Мои предметы <span class="muted small" id="vaultHint"></span></h2>
+        <div class="vault-grid" id="vaultGrid"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------ СБОРКИ ------------------------------ -->
+    <section class="panel" id="tab-loadouts">
+      <div class="block">
+        <h2>Мои сборки</h2>
+        <p class="muted small" id="myLoadoutsHint">Войдите через Steam — сборки привязываются к вашему SteamID64.</p>
+        <div class="loadouts" id="myLoadouts"></div>
+      </div>
+      <div class="block">
+        <h2>Публичные сборки игроков</h2>
+        <div class="loadouts" id="publicLoadouts"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------ СЕРВЕР ------------------------------ -->
+    <section class="panel" id="tab-server">
+      <div id="statusPill" class="pill pill-warn">загрузка…</div>
       <div class="cards" id="infoCards"></div>
 
       <div class="grid-2">
@@ -49,7 +211,7 @@
               <tbody></tbody>
             </table>
           </div>
-          <p class="muted small">Авторизация в панели — через Steam OpenID. Имена/аватары подтягиваются через Steam Web API, если задан <code>STEAM_API_KEY</code>.</p>
+          <p class="muted small">Авторизация в панели — через Steam OpenID. Имена/аватары подтягиваются через Steam Web API при заданном <code>STEAM_API_KEY</code>.</p>
         </div>
 
         <div class="block">
@@ -105,67 +267,58 @@
       </div>
     </section>
 
-    <!-- ------------------------------- СКИНЫ ------------------------------- -->
-    <section class="panel" id="tab-skins">
-      <div class="filters">
-        <input id="skinQuery" type="search" placeholder="Поиск: AWP, Asiimov, Fade…" />
-        <select id="skinWeapon"><option value="">Всё оружие</option></select>
-        <select id="skinRarity">
-          <option value="">Любая редкость</option>
-          <option value="exceedingly rare">Exceedingly Rare (ножи/перчатки)</option>
-          <option value="covert">Covert</option>
-          <option value="classified">Classified</option>
-          <option value="restricted">Restricted</option>
-          <option value="mil-spec">Mil-Spec</option>
-          <option value="industrial">Industrial</option>
-          <option value="consumer">Consumer</option>
-        </select>
-        <select id="skinSort">
-          <option value="rarity">Сортировка: редкость</option>
-          <option value="weapon">Сортировка: оружие</option>
-          <option value="name">Сортировка: название</option>
-          <option value="float">Сортировка: износ</option>
-        </select>
-      </div>
+    <!-- ----------------------------- АДМИНКА ------------------------------ -->
+    <section class="panel" id="tab-admin">
+      <div class="cards" id="adminCards"></div>
 
-      <p class="notice">
-        Это справочник/вишлист: панель <b>не меняет</b> ничего в игровом клиенте и не трогает файлы CS2.
-        Клиентские модификации скинов нарушают правила Steam и приводят к VAC-бану — здесь такого нет.
-      </p>
-
-      <div class="skins" id="skinGrid"></div>
-      <div class="pager">
-        <button class="btn btn-ghost btn-sm" id="prevPage">←</button>
-        <span id="pageLabel" class="muted small"></span>
-        <button class="btn btn-ghost btn-sm" id="nextPage">→</button>
-      </div>
-
-      <div class="block sticky-draft" id="draftBlock" hidden>
-        <h2>Черновик сборки <span class="muted small" id="draftCount"></span></h2>
-        <ul class="draft-list" id="draftList"></ul>
-        <div class="row">
-          <input id="loadoutName" type="text" placeholder="Название сборки" maxlength="80" />
-          <label class="checkbox"><input type="checkbox" id="loadoutPublic" /> публичная</label>
-          <button class="btn" id="saveLoadout">Сохранить по SteamID</button>
+      <div class="grid-2">
+        <div class="block">
+          <h2>Игроки</h2>
+          <div class="table-wrap">
+            <table class="table" id="adminUsers">
+              <thead><tr><th>SteamID</th><th>Монеты</th><th>Предметы</th><th>Розыгрыши</th><th>Ставок</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
-        <p class="muted small" id="draftHint">Войдите через Steam, чтобы сохранять сборки.</p>
+
+        <div class="block">
+          <h2>Добавить предмет в каталог</h2>
+          <form class="server-form" id="adminItemForm">
+            <input id="aiId" type="text" placeholder="id (латиница)" required />
+            <input id="aiWeapon" type="text" placeholder="Тип: Karambit / Медаль" required />
+            <input id="aiPattern" type="text" placeholder="Название: Doppler" required />
+            <input id="aiCategory" type="text" placeholder="Категория: Ножи" />
+            <select id="aiRarity">
+              <option value="mil-spec">Mil-Spec</option>
+              <option value="restricted">Restricted</option>
+              <option value="classified">Classified</option>
+              <option value="covert">Covert</option>
+              <option value="exceedingly rare">Exceedingly Rare</option>
+              <option value="industrial">Industrial</option>
+              <option value="consumer">Consumer</option>
+            </select>
+            <input id="aiPrice" type="number" min="1" placeholder="Цена, монеты" required />
+            <button class="btn" type="submit">Добавить</button>
+          </form>
+
+          <h2>Правки каталога</h2>
+          <div class="loadouts" id="adminItems"></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <h2>История розыгрышей</h2>
+        <div class="table-wrap">
+          <table class="table" id="adminHistory">
+            <thead><tr><th>Время</th><th>Игрок</th><th>Цель</th><th>Ставка</th><th>Шанс</th><th>Итог</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
-    <!-- ------------------------------ СБОРКИ ------------------------------ -->
-    <section class="panel" id="tab-loadouts">
-      <div class="block">
-        <h2>Мои сборки</h2>
-        <p class="muted small" id="myLoadoutsHint">Войдите через Steam — сборки привязываются к вашему SteamID64.</p>
-        <div class="loadouts" id="myLoadouts"></div>
-      </div>
-      <div class="block">
-        <h2>Публичные сборки игроков</h2>
-        <div class="loadouts" id="publicLoadouts"></div>
-      </div>
-    </section>
-
-    <!-- ---------------------------- НАСТРОЙКИ ----------------------------- -->
+    <!-- ---------------------------- НАСТРОЙКИ ---------------------------- -->
     <section class="panel" id="tab-settings">
       <div class="block">
         <h2>Серверы</h2>
@@ -185,14 +338,14 @@
         <ul class="kv" id="configState"></ul>
         <p class="muted small">
           Все настройки — через переменные окружения, см. <code>.env.example</code>.
-          Данные (серверы, сборки, профили) лежат в <code>data/store.json</code>.
+          Данные (серверы, сборки, профили, экономика) лежат в <code>data/store.json</code>.
         </p>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <span class="muted small">CS2 Panel · Node.js + Express · RCON (Source) · Steam OpenID</span>
+    <span class="muted small">CS2 Panel · Node.js + Express · RCON (Source) · Steam OpenID · виртуальная валюта без реальных ставок</span>
   </footer>
 
   <div class="toast" id="toast" hidden></div>

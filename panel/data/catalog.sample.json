@@ -1,0 +1,1019 @@
+{
+  "_notice": "Демо-каталог витрины CS2 Panel. Цены — в виртуальных монетах панели (не имеют реальной стоимости). Положите свой файл data/catalog.json с тем же форматом, и панель будет использовать его. Поля: id, weapon, pattern, category, rarity, price, float [min,max] | null, collection.",
+  "items": [
+    {
+      "id": "ak47-redline",
+      "weapon": "AK-47",
+      "pattern": "Redline",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": [
+        0.1,
+        0.7
+      ],
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "ak47-vulcan",
+      "weapon": "AK-47",
+      "pattern": "Vulcan",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 1500
+    },
+    {
+      "id": "ak47-neon-rider",
+      "weapon": "AK-47",
+      "pattern": "Neon Rider",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 1700
+    },
+    {
+      "id": "ak47-fire-serpent",
+      "weapon": "AK-47",
+      "pattern": "Fire Serpent",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 2400
+    },
+    {
+      "id": "ak47-asiimov",
+      "weapon": "AK-47",
+      "pattern": "Asiimov",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": [
+        0.18,
+        0.85
+      ],
+      "collection": "",
+      "price": 1000
+    },
+    {
+      "id": "ak47-case-hardened",
+      "weapon": "AK-47",
+      "pattern": "Case Hardened",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "ak47-blue-laminate",
+      "weapon": "AK-47",
+      "pattern": "Blue Laminate",
+      "category": "Винтовки",
+      "rarity": "mil-spec",
+      "float": null,
+      "collection": "",
+      "price": 15
+    },
+    {
+      "id": "ak47-ice-coaled",
+      "weapon": "AK-47",
+      "pattern": "Ice Coaled",
+      "category": "Винтовки",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 40
+    },
+    {
+      "id": "ak47-head-shot",
+      "weapon": "AK-47",
+      "pattern": "Head Shot",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "m4a4-asiimov",
+      "weapon": "M4A4",
+      "pattern": "Asiimov",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": [
+        0.18,
+        0.85
+      ],
+      "collection": "",
+      "price": 1200
+    },
+    {
+      "id": "m4a4-howl",
+      "weapon": "M4A4",
+      "pattern": "Howl",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": [
+        0,
+        0.6
+      ],
+      "collection": "",
+      "price": 5000
+    },
+    {
+      "id": "m4a4-dragon-king",
+      "weapon": "M4A4",
+      "pattern": "Dragon King",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "m4a4-griffin",
+      "weapon": "M4A4",
+      "pattern": "Griffin",
+      "category": "Винтовки",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 40
+    },
+    {
+      "id": "m4a4-hellfire",
+      "weapon": "M4A4",
+      "pattern": "Hellfire",
+      "category": "Винтовки",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 40
+    },
+    {
+      "id": "m4a4-temukau",
+      "weapon": "M4A4",
+      "pattern": "Temukau",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "m4a1s-printstream",
+      "weapon": "M4A1-S",
+      "pattern": "Printstream",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": [
+        0,
+        0.8
+      ],
+      "collection": "",
+      "price": 1900
+    },
+    {
+      "id": "m4a1s-knight",
+      "weapon": "M4A1-S",
+      "pattern": "Knight",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 320
+    },
+    {
+      "id": "m4a1s-golden-coil",
+      "weapon": "M4A1-S",
+      "pattern": "Golden Coil",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "m4a1s-cyrex",
+      "weapon": "M4A1-S",
+      "pattern": "Cyrex",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "m4a1s-player-two",
+      "weapon": "M4A1-S",
+      "pattern": "Player Two",
+      "category": "Винтовки",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "m4a1s-black-lotus",
+      "weapon": "M4A1-S",
+      "pattern": "Black Lotus",
+      "category": "Винтовки",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 320
+    },
+    {
+      "id": "awp-dragon-lore",
+      "weapon": "AWP",
+      "pattern": "Dragon Lore",
+      "category": "Снайперские",
+      "rarity": "covert",
+      "float": [
+        0,
+        0.7
+      ],
+      "collection": "The Cobblestone Collection",
+      "price": 12000
+    },
+    {
+      "id": "awp-asiimov",
+      "weapon": "AWP",
+      "pattern": "Asiimov",
+      "category": "Снайперские",
+      "rarity": "covert",
+      "float": [
+        0.18,
+        0.85
+      ],
+      "collection": "",
+      "price": 1400
+    },
+    {
+      "id": "awp-gungnir",
+      "weapon": "AWP",
+      "pattern": "Gungnir",
+      "category": "Снайперские",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 6000
+    },
+    {
+      "id": "awp-neo-noir",
+      "weapon": "AWP",
+      "pattern": "Neo-Noir",
+      "category": "Снайперские",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 800
+    },
+    {
+      "id": "awp-lightning-strike",
+      "weapon": "AWP",
+      "pattern": "Lightning Strike",
+      "category": "Снайперские",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 2600
+    },
+    {
+      "id": "awp-electric-hive",
+      "weapon": "AWP",
+      "pattern": "Electric Hive",
+      "category": "Снайперские",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "awp-mortis",
+      "weapon": "AWP",
+      "pattern": "Mortis",
+      "category": "Снайперские",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "ssg08-dragonfire",
+      "weapon": "SSG 08",
+      "pattern": "Dragonfire",
+      "category": "Снайперские",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 900
+    },
+    {
+      "id": "scar20-grotto",
+      "weapon": "SCAR-20",
+      "pattern": "Grotto",
+      "category": "Снайперские",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "deagle-blaze",
+      "weapon": "Desert Eagle",
+      "pattern": "Blaze",
+      "category": "Пистолеты",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 700
+    },
+    {
+      "id": "deagle-golden-koi",
+      "weapon": "Desert Eagle",
+      "pattern": "Golden Koi",
+      "category": "Пистолеты",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "deagle-printstream",
+      "weapon": "Desert Eagle",
+      "pattern": "Printstream",
+      "category": "Пистолеты",
+      "rarity": "covert",
+      "float": [
+        0,
+        0.8
+      ],
+      "collection": "",
+      "price": 1500
+    },
+    {
+      "id": "glock-fade",
+      "weapon": "Glock-18",
+      "pattern": "Fade",
+      "category": "Пистолеты",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 350
+    },
+    {
+      "id": "glock-water-elemental",
+      "weapon": "Glock-18",
+      "pattern": "Water Elemental",
+      "category": "Пистолеты",
+      "rarity": "mil-spec",
+      "float": null,
+      "collection": "",
+      "price": 15
+    },
+    {
+      "id": "usp-s-kill-confirmed",
+      "weapon": "USP-S",
+      "pattern": "Kill Confirmed",
+      "category": "Пистолеты",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 1800
+    },
+    {
+      "id": "usp-s-orion",
+      "weapon": "USP-S",
+      "pattern": "Orion",
+      "category": "Пистолеты",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 40
+    },
+    {
+      "id": "usp-s-neo-noir",
+      "weapon": "USP-S",
+      "pattern": "Neo-Noir",
+      "category": "Пистолеты",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 500
+    },
+    {
+      "id": "p250-see-ya-later",
+      "weapon": "P250",
+      "pattern": "See Ya Later",
+      "category": "Пистолеты",
+      "rarity": "mil-spec",
+      "float": null,
+      "collection": "",
+      "price": 15
+    },
+    {
+      "id": "tec9-blue-titanium",
+      "weapon": "Tec-9",
+      "pattern": "Blue Titanium",
+      "category": "Пистолеты",
+      "rarity": "mil-spec",
+      "float": null,
+      "collection": "",
+      "price": 15
+    },
+    {
+      "id": "fn57-case-hardened",
+      "weapon": "Five-SeveN",
+      "pattern": "Case Hardened",
+      "category": "Пистолеты",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 40
+    },
+    {
+      "id": "mp9-starlight-protector",
+      "weapon": "MP9",
+      "pattern": "Starlight Protector",
+      "category": "Пистолеты-пулемёты",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 900
+    },
+    {
+      "id": "mac10-neon-rider",
+      "weapon": "MAC-10",
+      "pattern": "Neon Rider",
+      "category": "Пистолеты-пулемёты",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 1100
+    },
+    {
+      "id": "ump45-momentum",
+      "weapon": "UMP-45",
+      "pattern": "Momentum",
+      "category": "Пистолеты-пулемёты",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "p90-asiimov",
+      "weapon": "P90",
+      "pattern": "Asiimov",
+      "category": "Пистолеты-пулемёты",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "mp7-bloodsport",
+      "weapon": "MP7",
+      "pattern": "Bloodsport",
+      "category": "Пистолеты-пулемёты",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "nova-antique",
+      "weapon": "Nova",
+      "pattern": "Antique",
+      "category": "Дробовики",
+      "rarity": "mil-spec",
+      "float": null,
+      "collection": "",
+      "price": 15
+    },
+    {
+      "id": "mag7-monster-call",
+      "weapon": "MAG-7",
+      "pattern": "Monster Call",
+      "category": "Дробовики",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 600
+    },
+    {
+      "id": "xm1014-incinegator",
+      "weapon": "XM1014",
+      "pattern": "Incinegator",
+      "category": "Дробовики",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 480
+    },
+    {
+      "id": "sawed-off-devourer",
+      "weapon": "Sawed-Off",
+      "pattern": "The Devourer",
+      "category": "Дробовики",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 110
+    },
+    {
+      "id": "karambit-fade",
+      "weapon": "Karambit",
+      "pattern": "Fade",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 9000
+    },
+    {
+      "id": "karambit-doppler",
+      "weapon": "Karambit",
+      "pattern": "Doppler",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 7000
+    },
+    {
+      "id": "karambit-marble-fade",
+      "weapon": "Karambit",
+      "pattern": "Marble Fade",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 8000
+    },
+    {
+      "id": "karambit-case-hardened",
+      "weapon": "Karambit",
+      "pattern": "Case Hardened",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 6500
+    },
+    {
+      "id": "karambit-lore",
+      "weapon": "Karambit",
+      "pattern": "Lore",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 5500
+    },
+    {
+      "id": "m9-bayonet-doppler",
+      "weapon": "M9 Bayonet",
+      "pattern": "Doppler",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 5000
+    },
+    {
+      "id": "m9-bayonet-lore",
+      "weapon": "M9 Bayonet",
+      "pattern": "Lore",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 4000
+    },
+    {
+      "id": "butterfly-fade",
+      "weapon": "Butterfly Knife",
+      "pattern": "Fade",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 6000
+    },
+    {
+      "id": "butterfly-doppler",
+      "weapon": "Butterfly Knife",
+      "pattern": "Doppler",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 5200
+    },
+    {
+      "id": "bayonet-doppler",
+      "weapon": "Bayonet",
+      "pattern": "Doppler",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 3000
+    },
+    {
+      "id": "flip-fade",
+      "weapon": "Flip Knife",
+      "pattern": "Fade",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 2500
+    },
+    {
+      "id": "gut-doppler",
+      "weapon": "Gut Knife",
+      "pattern": "Doppler",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 2500
+    },
+    {
+      "id": "skeleton-doppler",
+      "weapon": "Skeleton Knife",
+      "pattern": "Doppler",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 2500
+    },
+    {
+      "id": "talon-doppler",
+      "weapon": "Talon Knife",
+      "pattern": "Doppler",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 2500
+    },
+    {
+      "id": "shadow-daggers-lore",
+      "weapon": "Shadow Daggers",
+      "pattern": "Lore",
+      "category": "Ножи",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 2500
+    },
+    {
+      "id": "sport-gloves-pandora",
+      "weapon": "Sport Gloves",
+      "pattern": "Pandora's Box",
+      "category": "Перчатки",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 4500
+    },
+    {
+      "id": "sport-gloves-vice",
+      "weapon": "Sport Gloves",
+      "pattern": "Vice",
+      "category": "Перчатки",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 5200
+    },
+    {
+      "id": "specialist-crimson-kimono",
+      "weapon": "Specialist Gloves",
+      "pattern": "Crimson Kimono",
+      "category": "Перчатки",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 3200
+    },
+    {
+      "id": "driver-king-snake",
+      "weapon": "Driver Gloves",
+      "pattern": "King Snake",
+      "category": "Перчатки",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 2100
+    },
+    {
+      "id": "hand-wraps-cobalt-skulls",
+      "weapon": "Hand Wraps",
+      "pattern": "Cobalt Skulls",
+      "category": "Перчатки",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 900
+    },
+    {
+      "id": "moto-spearmint",
+      "weapon": "Moto Gloves",
+      "pattern": "Spearmint",
+      "category": "Перчатки",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 1400
+    },
+    {
+      "id": "sticker-titan-holo-kato14",
+      "weapon": "Sticker",
+      "pattern": "Titan (Holo) | Katowice 2014",
+      "category": "Стикеры",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 15000
+    },
+    {
+      "id": "sticker-ibp-holo-kato14",
+      "weapon": "Sticker",
+      "pattern": "iBUYPOWER (Holo) | Katowice 2014",
+      "category": "Стикеры",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 12000
+    },
+    {
+      "id": "sticker-navi-gold-stockholm21",
+      "weapon": "Sticker",
+      "pattern": "Natus Vincere (Gold) | Stockholm 2021",
+      "category": "Стикеры",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 4000
+    },
+    {
+      "id": "sticker-awpesome-holo",
+      "weapon": "Sticker",
+      "pattern": "Awpesome (Holo)",
+      "category": "Стикеры",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 350
+    },
+    {
+      "id": "sticker-hello-its-me",
+      "weapon": "Sticker",
+      "pattern": "Hello, Its Me",
+      "category": "Стикеры",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 60
+    },
+    {
+      "id": "medal-service-2023",
+      "weapon": "Медаль",
+      "pattern": "Service Medal | 2023",
+      "category": "Медали",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 800
+    },
+    {
+      "id": "medal-service-2024",
+      "weapon": "Медаль",
+      "pattern": "Service Medal | 2024",
+      "category": "Медали",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 800
+    },
+    {
+      "id": "medal-service-2025",
+      "weapon": "Медаль",
+      "pattern": "Service Medal | 2025",
+      "category": "Медали",
+      "rarity": "exceedingly rare",
+      "float": null,
+      "collection": "",
+      "price": 900
+    },
+    {
+      "id": "medal-premier-season-one",
+      "weapon": "Медаль",
+      "pattern": "Premier Season One Medal",
+      "category": "Медали",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 300
+    },
+    {
+      "id": "medal-premier-season-two",
+      "weapon": "Медаль",
+      "pattern": "Premier Season Two Medal",
+      "category": "Медали",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 320
+    },
+    {
+      "id": "medal-premier-season-three",
+      "weapon": "Медаль",
+      "pattern": "Premier Season Three Medal",
+      "category": "Медали",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 340
+    },
+    {
+      "id": "pin-dust2",
+      "weapon": "Значок",
+      "pattern": "Pin | Dust II",
+      "category": "Значки",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 120
+    },
+    {
+      "id": "pin-mirage",
+      "weapon": "Значок",
+      "pattern": "Pin | Mirage",
+      "category": "Значки",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 120
+    },
+    {
+      "id": "pin-inferno",
+      "weapon": "Значок",
+      "pattern": "Pin | Inferno",
+      "category": "Значки",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 120
+    },
+    {
+      "id": "pin-ancient",
+      "weapon": "Значок",
+      "pattern": "Pin | Ancient",
+      "category": "Значки",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 120
+    },
+    {
+      "id": "case-revolution",
+      "weapon": "Кейс",
+      "pattern": "Revolution Case",
+      "category": "Кейсы",
+      "rarity": "consumer",
+      "float": null,
+      "collection": "",
+      "price": 15
+    },
+    {
+      "id": "case-kilowatt",
+      "weapon": "Кейс",
+      "pattern": "Kilowatt Case",
+      "category": "Кейсы",
+      "rarity": "consumer",
+      "float": null,
+      "collection": "",
+      "price": 15
+    },
+    {
+      "id": "case-gallery",
+      "weapon": "Кейс",
+      "pattern": "Gallery Case",
+      "category": "Кейсы",
+      "rarity": "consumer",
+      "float": null,
+      "collection": "",
+      "price": 18
+    },
+    {
+      "id": "case-fever",
+      "weapon": "Кейс",
+      "pattern": "Fever Case",
+      "category": "Кейсы",
+      "rarity": "consumer",
+      "float": null,
+      "collection": "",
+      "price": 20
+    },
+    {
+      "id": "case-dreams-nightmares",
+      "weapon": "Кейс",
+      "pattern": "Dreams & Nightmares Case",
+      "category": "Кейсы",
+      "rarity": "consumer",
+      "float": null,
+      "collection": "",
+      "price": 14
+    },
+    {
+      "id": "music-halo-mcc",
+      "weapon": "Музыкальный набор",
+      "pattern": "Music Kit | Halo: The Master Chief Collection",
+      "category": "Музыка",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 400
+    },
+    {
+      "id": "music-ki-theory-molotov",
+      "weapon": "Музыкальный набор",
+      "pattern": "Music Kit | Ki:Theory, MOLOTOV",
+      "category": "Музыка",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 90
+    },
+    {
+      "id": "music-noisia-machine-gun",
+      "weapon": "Музыкальный набор",
+      "pattern": "Music Kit | Noisia, Machine Gun",
+      "category": "Музыка",
+      "rarity": "restricted",
+      "float": null,
+      "collection": "",
+      "price": 95
+    },
+    {
+      "id": "patch-phoenix",
+      "weapon": "Патч",
+      "pattern": "Patch | Phoenix",
+      "category": "Патчи",
+      "rarity": "mil-spec",
+      "float": null,
+      "collection": "",
+      "price": 35
+    },
+    {
+      "id": "patch-esl-one-cologne",
+      "weapon": "Патч",
+      "pattern": "Patch | ESL One Cologne 2014",
+      "category": "Патчи",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 150
+    },
+    {
+      "id": "agent-sir-bloody-miami",
+      "weapon": "Агент",
+      "pattern": "Agent | Sir Bloody Miami Darryl",
+      "category": "Агенты",
+      "rarity": "covert",
+      "float": null,
+      "collection": "",
+      "price": 600
+    },
+    {
+      "id": "agent-ricksaw",
+      "weapon": "Агент",
+      "pattern": "Agent | Lt. Commander Ricksaw",
+      "category": "Агенты",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 250
+    },
+    {
+      "id": "agent-getaway-sally",
+      "weapon": "Агент",
+      "pattern": "Agent | Getaway Sally",
+      "category": "Агенты",
+      "rarity": "classified",
+      "float": null,
+      "collection": "",
+      "price": 230
+    }
+  ]
+}

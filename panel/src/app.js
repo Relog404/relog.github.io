@@ -3,7 +3,8 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import { config, isAdmin, ROOT } from './config.js';
 import * as store from './store.js';
-import * as skins from './skins.js';
+import * as items from './items.js';
+import * as economy from './economy.js';
 import { execRcon, parseStatus, demoStatus, RconError } from './rcon.js';
 import { steamLoginUrl, verifySteamLogin, getPlayerSummaries, createSession, readSession } from './steam.js';
 
@@ -47,7 +48,7 @@ export function createApp() {
   /* -------------------------------- API -------------------------------- */
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, skins: skins.loadSkins().length, servers: store.listServers().length, uptime: process.uptime() });
+    res.json({ ok: true, skins: items.loadItems().length, servers: store.listServers().length, uptime: process.uptime() });
   });
 
   app.get('/api/config', (_req, res) => {
@@ -58,6 +59,7 @@ export function createApp() {
       admins: config.adminSteamIds,
       allowServerManagement: config.allowServerManagement,
       baseUrl: config.baseUrl,
+      economy: economy.settings(),
     });
   });
 
@@ -248,15 +250,15 @@ export function createApp() {
     }
   }));
 
-  /* -------------------------------- скины ------------------------------ */
+  /* ------------------------------ витрина ------------------------------ */
 
-  app.get('/api/skins', (req, res) => {
-    res.json(skins.querySkins(req.query));
-  });
+  // /api/skins и /api/catalog — один и тот же каталог, /api/skins оставлен для совместимости.
+  const catalogQuery = (req, res) => res.json(items.queryItems(req.query));
 
-  app.get('/api/skins/weapons', (_req, res) => {
-    res.json({ weapons: skins.weaponsIndex() });
-  });
+  app.get('/api/skins', catalogQuery);
+  app.get('/api/catalog', catalogQuery);
+  app.get('/api/skins/weapons', (_req, res) => res.json({ weapons: items.weaponsIndex() }));
+  app.get('/api/catalog/categories', (_req, res) => res.json({ categories: items.categoryIndex() }));
 
   /* ------------------------------- сборки ------------------------------- */
 
@@ -277,6 +279,131 @@ export function createApp() {
 
   app.get('/api/loadout/public', (_req, res) => {
     res.json({ loadouts: store.listPublicLoadouts(24) });
+  });
+
+  /* --------------------- монеты, хранилище, магазин --------------------- */
+
+  // Экономика полностью виртуальная: монеты нельзя купить за деньги, пополнить
+  // реальными предметами из Steam или вывести наружу. См. economy.js.
+  const economyRoute = (fn) =>
+    asyncRoute(async (req, res) => {
+      try {
+        await fn(req, res);
+      } catch (error) {
+        const status = { no_coins: 400, no_item: 404, bad_items: 400, banned: 403, daily_cooldown: 429 }[error.code] || 400;
+        res.status(status).json({ error: error.message, code: error.code });
+      }
+    });
+
+  app.get('/api/economy/state', requireAuth, economyRoute((req, res) => {
+    res.json(economy.publicState(req.user.steamId));
+  }));
+
+  app.post('/api/economy/daily', requireAuth, economyRoute((req, res) => {
+    res.json({ coins: economy.claimDaily(req.user.steamId) });
+  }));
+
+  app.post('/api/economy/buy', requireAuth, economyRoute((req, res) => {
+    res.json(economy.buyItem(req.user.steamId, req.body?.itemId));
+  }));
+
+  app.post('/api/economy/sell', requireAuth, economyRoute((req, res) => {
+    res.json(economy.sellItem(req.user.steamId, req.body?.uid));
+  }));
+
+  app.post('/api/economy/seed', requireAuth, economyRoute((req, res) => {
+    res.json(economy.rotateSeed(req.user.steamId));
+  }));
+
+  app.post('/api/upgrade/preview', requireAuth, economyRoute((req, res) => {
+    res.json(economy.previewUpgrade(req.user.steamId, req.body?.uids || [], req.body?.targetItemId));
+  }));
+
+  app.post('/api/upgrade/play', requireAuth, economyRoute((req, res) => {
+    res.json(economy.playUpgrade(req.user.steamId, req.body?.uids || [], req.body?.targetItemId));
+  }));
+
+  app.get('/api/upgrade/history', (_req, res) => {
+    res.json({ history: store.getHistory(20) });
+  });
+
+  /** Проверка честности розыгрыша: тот же roll при тех же seed'ах. */
+  app.get('/api/upgrade/verify', (req, res) => {
+    const { serverSeed, clientSeed, nonce } = req.query;
+    if (!serverSeed || !clientSeed || nonce === undefined) {
+      return res.status(400).json({ error: 'Нужны serverSeed, clientSeed и nonce' });
+    }
+    res.json(economy.verifyRoll({ serverSeed, clientSeed, nonce: Number(nonce) }));
+  });
+
+  /* ------------------------------ админка ------------------------------- */
+
+  app.get('/api/admin/stats', requireAdmin, (_req, res) => {
+    res.json(economy.globalStats());
+  });
+
+  app.get('/api/admin/users', requireAdmin, (req, res) => {
+    const users = economy.listUsers().map((user) => ({
+      ...user,
+      profile: store.getProfile(user.steamId) || null,
+    }));
+    res.json({ users: users.sort((a, b) => b.wagered - a.wagered).slice(0, 100) });
+  });
+
+  app.post('/api/admin/coins', requireAdmin, (req, res) => {
+    const { steamId, amount } = req.body || {};
+    if (!/^\d{5,20}$/.test(String(steamId || ''))) return res.status(400).json({ error: 'Некорректный SteamID' });
+    const delta = Number(amount);
+    if (!Number.isFinite(delta) || delta === 0) return res.status(400).json({ error: 'Некорректная сумма' });
+    res.json({ steamId, coins: economy.grantCoins(steamId, delta) });
+  });
+
+  app.post('/api/admin/ban', requireAdmin, (req, res) => {
+    const { steamId, banned } = req.body || {};
+    if (!/^\d{5,20}$/.test(String(steamId || ''))) return res.status(400).json({ error: 'Некорректный SteamID' });
+    res.json({ steamId, banned: economy.setBan(steamId, banned !== false) });
+  });
+
+  app.get('/api/admin/history', requireAdmin, (_req, res) => {
+    res.json({ history: store.getHistory(50) });
+  });
+
+  app.get('/api/admin/items', requireAdmin, (_req, res) => {
+    res.json({ custom: store.getCustomItems(), overrides: store.getCatalogOverrides() });
+  });
+
+  app.post('/api/admin/items', requireAdmin, (req, res) => {
+    const { id, weapon, pattern, category, rarity, price } = req.body || {};
+    if (!id || !weapon || !pattern) return res.status(400).json({ error: 'Нужны id, weapon и pattern' });
+    if (!/^[\w\-. ]{2,80}$/.test(String(id))) return res.status(400).json({ error: 'id: только буквы, цифры, -, _ и .' });
+    const item = store.upsertCustomItem({
+      id: String(id),
+      weapon: String(weapon).slice(0, 60),
+      pattern: String(pattern).slice(0, 80),
+      category: String(category || 'Прочее').slice(0, 40),
+      rarity: String(rarity || 'mil-spec').slice(0, 40),
+      price: Math.max(1, Math.round(Number(price) || 1)),
+    });
+    items.resetCache();
+    res.status(201).json({ item });
+  });
+
+  app.patch('/api/admin/items/:id', requireAdmin, (req, res) => {
+    const { price, hidden } = req.body || {};
+    const patch = {};
+    if (price !== undefined) patch.price = Math.max(1, Math.round(Number(price) || 1));
+    if (hidden !== undefined) patch.hidden = Boolean(hidden);
+    const override = store.setCatalogOverride(req.params.id, patch);
+    items.resetCache();
+    res.json({ id: req.params.id, override });
+  });
+
+  app.delete('/api/admin/items/:id', requireAdmin, (req, res) => {
+    const custom = store.getCustomItems().some((i) => i.id === req.params.id);
+    if (custom) store.removeCustomItem(req.params.id);
+    else store.setCatalogOverride(req.params.id, { hidden: true });
+    items.resetCache();
+    res.json({ ok: true });
   });
 
   app.get('/api/profile/:steamId', asyncRoute(async (req, res) => {
