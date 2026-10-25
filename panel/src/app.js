@@ -336,6 +336,56 @@ export function createApp() {
     res.json(economy.verifyRoll({ serverSeed, clientSeed, nonce: Number(nonce) }));
   });
 
+  /* --------------------- экипировка и API плагина ------------------------ */
+
+  // Слоты + что надето + из чего можно выбрать.
+  app.get('/api/equip', requireAuth, (_req, res) => {
+    res.json({ slots: economy.equippedState(_req.user.steamId) });
+  });
+
+  app.post('/api/equip', requireAuth, economyRoute((req, res) => {
+    const { slot, uid, wear, seed, statTrak, kills } = req.body || {};
+    if (!slot || !uid) return res.status(400).json({ error: 'Нужны slot и uid' });
+    res.json({ equipped: economy.equipItem(req.user.steamId, slot, uid, { wear, seed, statTrak, kills }) });
+  }));
+
+  app.delete('/api/equip/:slot', requireAuth, (_req, res) => {
+    res.json({ ok: economy.unequipSlot(_req.user.steamId, _req.params.slot) });
+  });
+
+  /** Чужая экипировка — для профилей, без списка доступных предметов. */
+  app.get('/api/equip/:steamId', (req, res) => {
+    if (!/^\d{5,20}$/.test(req.params.steamId)) return res.status(400).json({ error: 'Некорректный SteamID' });
+    const econ = store.getEconomy(req.params.steamId);
+    if (!econ?.equipped) return res.json({ steamId: req.params.steamId, equipped: [] });
+    res.json({
+      steamId: req.params.steamId,
+      equipped: Object.values(econ.equipped).map((e) => ({
+        ...e,
+        item: items.findItem(e.itemId),
+        slot: items.findSlot(e.slot),
+      })),
+    });
+  });
+
+  /**
+   * То, что забирает игровой плагин (CounterStrikeSharp) перед выдачей оружия.
+   * Авторизация: заголовок X-Plugin-Key (ключ сервера из панели или PLUGIN_API_KEY).
+   */
+  app.get('/api/plugin/loadout/:steamId', (req, res) => {
+    const key = req.get('X-Plugin-Key') || req.query.key;
+    const allowed = (config.pluginApiKey && key === config.pluginApiKey) || store.isValidPluginKey(key);
+    if (!allowed) return res.status(401).json({ error: 'Нужен ключ плагина' });
+    if (!/^\d{5,20}$/.test(req.params.steamId)) return res.status(400).json({ error: 'Некорректный SteamID' });
+    res.json(economy.pluginLoadout(req.params.steamId));
+  });
+
+  app.post('/api/servers/:id/plugin-key', requireAdmin, (req, res) => {
+    const key = store.regeneratePluginKey(req.params.id);
+    if (!key) return res.status(404).json({ error: 'Сервер не найден' });
+    res.json({ pluginKey: key });
+  });
+
   /* ------------------------------ админка ------------------------------- */
 
   app.get('/api/admin/stats', requireAdmin, (_req, res) => {

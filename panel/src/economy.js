@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import * as store from './store.js';
 import * as items from './items.js';
+const { findItem, findSlot, itemFitsSlot, slotIndex } = items;
 
 /**
  * Внутренняя экономика панели.
@@ -276,4 +277,102 @@ export function setBan(steamId, banned) {
 
 export function verifyRoll({ serverSeed, clientSeed, nonce }) {
   return { roll: fairRoll(serverSeed, clientSeed, nonce), serverSeedHash: sha256(serverSeed) };
+}
+
+
+/* --------------------- экипировка (что наденет сервер) ------------------ */
+
+function fail(message, code) {
+  return Object.assign(new Error(message), { code });
+}
+
+/**
+ * Надевает предмет из хранилища в слот. Предмет остаётся в хранилище —
+ * это просто выбранный скин, который серверный плагин применит игроку.
+ */
+export function equipItem(steamId, slotKey, uid, { wear, seed, statTrak, kills } = {}) {
+  const slot = findSlot(slotKey);
+  if (!slot) throw fail('Нет такого слота', 'no_slot');
+
+  const econ = stateFor(steamId);
+  const entry = econ.items.find((i) => i.uid === uid);
+  if (!entry) throw fail('Предмета нет в вашем хранилище', 'no_item');
+
+  const item = findItem(entry.itemId);
+  if (!item) throw fail('Предмет пропал из каталога', 'no_item');
+  if (!itemFitsSlot(item, slot)) throw fail(`«${item.pattern}» не подходит для слота «${slot.label}»`, 'bad_slot');
+
+  const [min, max] = item.float || [0, 1];
+  const targetWear = Number.isFinite(Number(wear)) ? Number(wear) : min;
+
+  econ.equipped = econ.equipped || {};
+  econ.equipped[slot.key] = {
+    uid,
+    itemId: item.id,
+    def: item.def,
+    paint: item.paint,
+    slot: slot.key,
+    wear: Number(Math.min(max, Math.max(min, targetWear)).toFixed(4)),
+    seed: Math.max(0, Math.min(1000, Math.round(Number(seed) || 0))),
+    statTrak: Boolean(statTrak),
+    kills: Math.max(0, Math.min(999999, Math.round(Number(kills) || 0))),
+    updatedAt: new Date().toISOString(),
+  };
+  store.saveEconomy(steamId, econ);
+  return econ.equipped[slot.key];
+}
+
+export function unequipSlot(steamId, slotKey) {
+  const econ = stateFor(steamId);
+  econ.equipped = econ.equipped || {};
+  const removed = Boolean(econ.equipped[slotKey]);
+  delete econ.equipped[slotKey];
+  store.saveEconomy(steamId, econ);
+  return removed;
+}
+
+/** Экипировка игрока вместе со списком подходящих предметов для каждого слота. */
+export function equippedState(steamId) {
+  const econ = stateFor(steamId);
+  const equipped = econ.equipped || {};
+  const owned = econ.items.map((entry) => ({ entry, item: findItem(entry.itemId) })).filter((o) => o.item);
+
+  return slotIndex().map((slot) => {
+    const active = equipped[slot.key] || null;
+    return {
+      ...slot,
+      equipped: active
+        ? { ...active, item: owned.find((o) => o.entry.uid === active.uid)?.item || findItem(active.itemId) }
+        : null,
+      options: owned
+        .filter((o) => itemFitsSlot(o.item, slot))
+        .map((o) => ({ uid: o.entry.uid, item: o.item })),
+    };
+  });
+}
+
+/** Компактный ответ для игрового плагина: что надеть игроку. */
+export function pluginLoadout(steamId) {
+  const econ = stateFor(steamId);
+  const equipped = econ.equipped || {};
+  const out = { steamId: String(steamId), weapons: [], knife: null, gloves: null, agentCt: null, agentT: null, music: null };
+
+  const pack = (entry) => {
+    if (!entry) return null;
+    return { def: entry.def, paint: entry.paint, wear: entry.wear, seed: entry.seed, statTrak: entry.statTrak, kills: entry.kills };
+  };
+
+  for (const [key, entry] of Object.entries(equipped)) {
+    const slot = findSlot(key);
+    if (!slot || !entry) continue;
+    if (slot.kind === 'weapon') out.weapons.push({ ...pack(entry), weapon: slot.weapon });
+    else if (slot.kind === 'knife') out.knife = pack(entry);
+    else if (slot.kind === 'gloves') out.gloves = pack(entry);
+    else if (slot.key === 'agent_ct') out.agentCt = pack(entry);
+    else if (slot.key === 'agent_t') out.agentT = pack(entry);
+    else if (slot.kind === 'music') out.music = pack(entry);
+  }
+
+  out.updatedAt = new Date().toISOString();
+  return out;
 }

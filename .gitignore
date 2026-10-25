@@ -15,3 +15,7 @@ cs2-server/game/
 .DS_Store
 Thumbs.db
 *.log
+
+# сборки плагинов (бинарники не коммитим)
+cs2-server/plugins/*/bin/
+cs2-server/plugins/*/obj/

@@ -28,6 +28,7 @@ function seed() {
     // Ничего не настроено — показываем демо-сервер, чтобы панель была сразу живой.
     store.servers.push({
       id: 'demo',
+      pluginKey: crypto.randomBytes(16).toString('hex'),
       name: 'Демо-сервер (нет подключения)',
       host: '127.0.0.1',
       gamePort: 27015,
@@ -93,6 +94,7 @@ export function addServer({ name, host, gamePort, rconPort, password }) {
   const store = load();
   const server = {
     id: crypto.randomUUID(),
+    pluginKey: crypto.randomBytes(16).toString('hex'),
     name: String(name || 'CS2 server').slice(0, 60),
     host: String(host || '127.0.0.1').slice(0, 120),
     gamePort: Number(gamePort) || 27015,
@@ -118,6 +120,22 @@ export function updateServer(id, patch) {
   save();
   const { password, ...safe } = server;
   return { ...safe, hasPassword: Boolean(password) };
+}
+
+/** Новый ключ для игрового плагина (старый перестаёт работать). */
+export function regeneratePluginKey(id) {
+  const store = load();
+  const server = store.servers.find((s) => s.id === id);
+  if (!server) return null;
+  server.pluginKey = crypto.randomBytes(16).toString('hex');
+  save();
+  return server.pluginKey;
+}
+
+/** Проверяет ключ плагина: глобальный из env или ключ конкретного сервера. */
+export function isValidPluginKey(key) {
+  if (!key) return false;
+  return load().servers.some((s) => s.pluginKey && s.pluginKey === key);
 }
 
 export function removeServer(id) {

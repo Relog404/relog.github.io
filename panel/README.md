@@ -62,6 +62,26 @@ npm start               # http://localhost:3000
 
 Экономика живёт в `data/store.json` (ключ — SteamID64), поэтому не требует никакой БД.
 
+## Скины на сервере (серверный скинченджер)
+
+Панель выдаёт игровому плагину набор скинов по SteamID:
+
+```
+GET /api/plugin/loadout/{steamId64}   + заголовок X-Plugin-Key
+→ { weapons: [{def, paint, wear, seed, statTrak, kills, weapon}], knife, gloves, agentCt, agentT, music }
+```
+
+- `def` — item definition index (AK-47 = 7, Karambit = 507, Sport Gloves = 5030),
+- `paint` — paint kit index (Redline = 282, Dragon Lore = 344).
+
+Оба числа уже лежат в каталоге, подставлять руками ничего не надо.
+Ключ плагина берётся на вкладке «Настройки» (кнопка «новый ключ») либо задаётся общий `PLUGIN_API_KEY`.
+
+На вкладке **«Экипировка»** игрок надевает купленные скины по слотам (оружие, нож, перчатки,
+агенты, музыка), задаёт износ, seed и StatTrak. Серверный плагин
+`cs2-server/plugins/PanelSkins` (CounterStrikeSharp) забирает этот набор и красит оружие
+**на стороне сервера** — клиент CS2 не модифицируется.
+
 ## Каталог своих предметов
 
 - `data/catalog.sample.json` — демо-каталог на 99 предметов с ценами в монетах.
@@ -72,10 +92,13 @@ npm start               # http://localhost:3000
 Формат элемента:
 
 ```json
-{ "id": "awp-dragon-lore", "weapon": "AWP", "pattern": "Dragon Lore",
-  "category": "Снайперские", "rarity": "covert", "price": 12000,
-  "float": [0.0, 0.7], "collection": "The Cobblestone Collection" }
+{ "id": "skin-4f8d99d09ded", "weapon": "AWP", "pattern": "Dragon Lore (Souvenir)",
+  "category": "Винтовки", "rarity": "covert", "price": 6400,
+  "def": 9, "paint": 344, "float": [0.0, 0.7], "collection": "", "image": "https://..." }
 ```
+
+`def` и `paint` нужны серверному плагину; `image` — картинка предмета в интерфейсе.
+Данные по предметам взяты из открытого датасета [ByMykel/CSGO-API](https://github.com/ByMykel/CSGO-API) (MIT).
 
 ## API
 
@@ -92,6 +115,10 @@ npm start               # http://localhost:3000
 | POST | `/api/upgrade/preview`, `/api/upgrade/play` | вошедший | расчёт шанса и розыгрыш |
 | GET | `/api/upgrade/history`, `/api/upgrade/verify` | все | история и проверка честности |
 | GET/POST/DELETE | `/api/loadout[/:id]` | вошедший | сборки по SteamID |
+| GET | `/api/equip`, POST `/api/equip`, DELETE `/api/equip/:slot` | вошедший | экипировка по слотам |
+| GET | `/api/equip/:steamId` | все | чужая экипировка |
+| GET | `/api/plugin/loadout/:steamId` | ключ плагина | набор скинов для сервера CS2 |
+| POST | `/api/servers/:id/plugin-key` | админ | перевыпустить ключ плагина |
 | GET | `/api/admin/stats` `/users` `/history` `/items` | админ | статистика |
 | POST | `/api/admin/coins`, `/api/admin/ban` | админ | монеты и бан |
 | POST/PATCH/DELETE | `/api/admin/items[/:id]` | админ | правки каталога |
@@ -99,12 +126,13 @@ npm start               # http://localhost:3000
 ## Тесты
 
 ```bash
-npm test    # 19 тестов (node:test)
+npm test    # 27 тестов (node:test)
 ```
 
 Покрыто: разграничение прав, парсер `status`, каталог, стартовый баланс и ежедневный бонус,
 покупка/продажа, расчёт шанса, детерминизм розыгрыша и проверка честности,
-история, админка (статистика, монеты, бан, правки каталога).
+история, админка (статистика, монеты, бан, правки каталога),
+экипировка (слоты, износ, seed) и API плагина (ключ, def/paint, права доступа).
 
 ## Деплой на выделенный сервер
 

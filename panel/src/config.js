@@ -47,6 +47,8 @@ export const config = {
   adminSteamIds: list(env.ADMIN_STEAM_IDS),
   /** Разрешать ли менять список серверов из панели (иначе только сервер из env). */
   allowServerManagement: bool(env.ALLOW_SERVER_MANAGEMENT, true),
+  /** Общий ключ для игровых плагинов (альтернатива ключу конкретного сервера). */
+  pluginApiKey: env.PLUGIN_API_KEY || '',
   dataDir: env.DATA_DIR || path.join(ROOT, 'data'),
   /** DEMO_MODE=1 — всегда отдавать демонстрационные данные, даже если серверы настроены. */
   demoMode: bool(env.DEMO_MODE, false),

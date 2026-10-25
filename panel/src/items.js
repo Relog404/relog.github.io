@@ -58,6 +58,11 @@ function normalize(item, index) {
     price: Math.max(1, Math.round(Number(item.price) || 1)),
     float: Array.isArray(item.float) && item.float.length === 2 ? [Number(item.float[0]), Number(item.float[1])] : null,
     collection: String(item.collection || '').slice(0, 80),
+    // def — item definition index (какой предмет), paint — paint kit index (какой скин).
+    // Именно эти два числа нужны серверному плагину, чтобы нарисовать скин игроку.
+    def: Number(item.def) > 0 ? Number(item.def) : null,
+    paint: Number(item.paint) >= 0 ? Number(item.paint) : null,
+    image: typeof item.image === 'string' ? item.image.slice(0, 400) : '',
   };
 }
 
@@ -127,4 +132,47 @@ export function randomItems(count, excludeId = null) {
   const out = [];
   for (let i = 0; i < count; i += 1) out.push(pool[Math.floor(Math.random() * pool.length)]);
   return out;
+}
+
+
+/* ------------------------------- слоты --------------------------------- */
+
+const WEAPON_CATEGORIES = ['Винтовки', 'Пистолеты', 'Пистолеты-пулемёты', 'Дробовики и пулемёты', 'Прочее'];
+
+const slug = (value) =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9а-яё]+/gi, '-')
+    .replace(/(^-|-$)/g, '');
+
+/** Слоты, которые понимает серверный плагин. */
+export function slotIndex() {
+  const weapons = new Map();
+  for (const item of loadItems()) {
+    if (!WEAPON_CATEGORIES.includes(item.category) || !item.def || item.paint === null) continue;
+    if (!weapons.has(item.weapon)) {
+      weapons.set(item.weapon, { key: `w-${slug(item.weapon)}`, label: item.weapon, weapon: item.weapon, def: item.def, kind: 'weapon' });
+    }
+  }
+
+  const special = [
+    { key: 'knife', label: 'Нож', category: 'Ножи', kind: 'knife' },
+    { key: 'gloves', label: 'Перчатки', category: 'Перчатки', kind: 'gloves' },
+    { key: 'agent_ct', label: 'Агент (CT)', category: 'Агенты', kind: 'agent' },
+    { key: 'agent_t', label: 'Агент (T)', category: 'Агенты', kind: 'agent' },
+    { key: 'music', label: 'Музыкальный набор', category: 'Музыка', kind: 'music' },
+  ];
+
+  return [...special, ...[...weapons.values()].sort((a, b) => a.label.localeCompare(b.label, 'ru'))];
+}
+
+export function findSlot(key) {
+  return slotIndex().find((slot) => slot.key === key) || null;
+}
+
+/** Подходит ли предмет для слота. */
+export function itemFitsSlot(item, slot) {
+  if (!slot) return false;
+  if (slot.kind === 'weapon') return item.weapon === slot.weapon && item.paint !== null;
+  return item.category === slot.category && (slot.kind === 'weapon' ? item.paint !== null : true);
 }

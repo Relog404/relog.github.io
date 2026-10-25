@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PanelSkins</AssemblyName>
+    <RootNamespace>PanelSkins</RootNamespace>
+    <!-- Собирать внутри контейнера сервера не надо: билдим на своей машине,
+         а в игры кладём уже готовую DLL. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Укажите путь к своей установке CounterStrikeSharp.
+         Обычно: <сервер>/game/csgo/addons/counterstrikesharp/shared/CounterStrikeSharp.API.dll -->
+    <Reference Include="CounterStrikeSharp.API">
+      <HintPath>$(CSSharpRefs)CounterStrikeSharp.API.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

@@ -21,6 +21,10 @@ const items = await import('../src/items.js');
 const PLAYER = '76561190000000002';
 const ADMIN = '76561190000000001';
 
+/** Найти предмет каталога по оружию и названию скина (id в каталоге генерируются из датасета). */
+const skin = (weapon, pattern) => items.queryItems({ weapon, query: pattern, pageSize: 1 }).items[0];
+const anyIn = (category, sort = 'price-asc') => items.queryItems({ category, sort, pageSize: 1 }).items[0];
+
 let server;
 let baseUrl;
 
@@ -57,7 +61,7 @@ test('новый игрок получает стартовые монеты и 
 });
 
 test('покупка и продажа: монеты списываются и возвращаются по курсу', async () => {
-  const item = items.findItem('glock-water-elemental');
+  const item = skin('Glock-18', 'Water Elemental');
   const before = economy.publicState(PLAYER).coins;
 
   const bought = await call('POST', '/api/economy/buy', { body: { itemId: item.id } });
@@ -79,7 +83,7 @@ test('нельзя купить то, чего не хватает по день
 
 test('предпросмотр апгрейда считает шанс как ставка / цена цели', async () => {
   const cheap = items.queryItems({ sort: 'price-asc', pageSize: 2 }).items;
-  const target = items.findItem('ak47-redline');
+  const target = skin('AK-47', 'Redline');
 
   for (const item of cheap) await call('POST', '/api/economy/buy', { body: { itemId: item.id } });
   const state = economy.publicState(PLAYER);
@@ -99,7 +103,7 @@ test('розыгрыш детерминирован: один и тот же rol
   econ.nonce = 0;
   store.saveEconomy(PLAYER, econ);
 
-  const target = items.findItem('nova-antique');
+  const target = skin('Nova', 'Antique');
   const state = economy.publicState(PLAYER);
   const uids = [state.items[0].uid];
   const expected = economy.verifyRoll({ serverSeed: 'fixed-server-seed', clientSeed: 'fixed-client-seed', nonce: 0 });
@@ -145,7 +149,7 @@ test('админка: статистика, начисление монет, б�
 
   const banned = await call('POST', '/api/admin/ban', { as: ADMIN, body: { steamId: PLAYER, banned: true } });
   assert.equal(banned.data.banned, true);
-  const blocked = await call('POST', '/api/economy/buy', { body: { itemId: 'case-kilowatt' } });
+  const blocked = await call('POST', '/api/economy/buy', { body: { itemId: anyIn('Стикеры').id } });
   assert.equal(blocked.status, 403);
   await call('POST', '/api/admin/ban', { as: ADMIN, body: { steamId: PLAYER, banned: false } });
 

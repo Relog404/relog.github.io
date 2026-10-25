@@ -14,6 +14,7 @@ const state = {
   target: null,  // предмет-цель из каталога
   chance: 0,
   spinning: false,
+  equip: null,
 };
 
 const CELL_W = 132;
@@ -521,6 +522,114 @@ async function loadHistory() {
   }
 }
 
+/* ------------------------------- экипировка ----------------------------- */
+
+async function loadEquip() {
+  if (!state.user) {
+    $('#equipGrid').innerHTML = '<p class="empty">Войдите через Steam, чтобы надеть скины.</p>';
+    $('#equipHint').textContent = '';
+    return;
+  }
+  try {
+    const { slots } = await api('/api/equip');
+    state.equip = slots;
+    renderEquip();
+  } catch (error) {
+    $('#equipGrid').innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderEquip() {
+  const slots = state.equip || [];
+  const used = slots.filter((s) => s.equipped).length;
+  $('#equipHint').textContent = `Надето слотов: ${used} из ${slots.length}. Нет нужного предмета — купите его в каталоге.`;
+
+  $('#equipGrid').innerHTML = slots
+    .map((slot) => {
+      const active = slot.equipped;
+      const item = active?.item;
+      const options = slot.options
+        .map((o) => `<option value="${escapeHtml(o.uid)}"${active?.uid === o.uid ? ' selected' : ''}>${escapeHtml(o.item.pattern)} · ${o.item.price} 🪙</option>`)
+        .join('');
+      const [min, max] = item?.float || [0, 1];
+      return `<div class="equip-card" data-slot-card="${escapeHtml(slot.key)}">
+        <div class="equip-head">
+          <span class="equip-label">${escapeHtml(slot.label)}</span>
+          <span class="badge">${escapeHtml(slot.kind === 'weapon' ? 'оружие' : slot.kind)}</span>
+        </div>
+        <div class="equip-preview" data-rarity="${escapeHtml(item?.rarity || 'consumer')}">
+          ${item?.image ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy">` : '<div class="ph">—</div>'}
+        </div>
+        <select data-equip-slot="${escapeHtml(slot.key)}">
+          <option value="">— не надето —</option>
+          ${options}
+        </select>
+        <div class="equip-row" ${active ? '' : 'hidden'}>
+          <label>износ <input type="number" step="0.001" min="${min}" max="${max}" value="${active?.wear ?? min}" data-wear="${escapeHtml(slot.key)}"></label>
+          <label>seed <input type="number" min="0" max="1000" value="${active?.seed ?? 0}" data-seed="${escapeHtml(slot.key)}"></label>
+        </div>
+        <div class="equip-row" ${active ? '' : 'hidden'}>
+          <label class="checkbox"><input type="checkbox" data-st="${escapeHtml(slot.key)}" ${active?.statTrak ? 'checked' : ''}> StatTrak</label>
+          <label>фраги <input type="number" min="0" value="${active?.kills ?? 0}" data-kills="${escapeHtml(slot.key)}" style="width:80px"></label>
+        </div>
+        <div class="equip-actions">
+          <button class="btn btn-sm" data-equip-save="${escapeHtml(slot.key)}" ${active ? '' : 'hidden'}>применить</button>
+          <button class="btn btn-sm btn-ghost ${active ? 'btn-danger' : ''}" data-equip-clear="${escapeHtml(slot.key)}" ${active ? '' : 'hidden'}>снять</button>
+        </div>
+      </div>`;
+    })
+    .join('');
+
+  $$('[data-equip-slot]').forEach((select) => {
+    select.onchange = async () => {
+      const slot = select.dataset.equipSlot;
+      if (!select.value) return clearSlot(slot);
+      try {
+        await api('/api/equip', { method: 'POST', body: JSON.stringify({ slot, uid: select.value }) });
+        toast('Скин надет', 'ok');
+        await loadEquip();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+
+  $$('[data-equip-save]').forEach((btn) => {
+    btn.onclick = async () => {
+      const slot = btn.dataset.equipSave;
+      const payload = {
+        slot,
+        uid: $(`[data-equip-slot="${slot}"]`).value,
+        wear: Number($(`[data-wear="${slot}"]`).value),
+        seed: Number($(`[data-seed="${slot}"]`).value),
+        statTrak: $(`[data-st="${slot}"]`).checked,
+        kills: Number($(`[data-kills="${slot}"]`).value),
+      };
+      try {
+        await api('/api/equip', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Сохранено', 'ok');
+        await loadEquip();
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+
+  $$('[data-equip-clear]').forEach((btn) => {
+    btn.onclick = () => clearSlot(btn.dataset.equipClear);
+  });
+}
+
+async function clearSlot(slot) {
+  try {
+    await api(`/api/equip/${encodeURIComponent(slot)}`, { method: 'DELETE' });
+    toast('Снято', 'ok');
+    await loadEquip();
+  } catch (error) {
+    toast(error.message, 'err');
+  }
+}
+
 /* -------------------------------- сборки -------------------------------- */
 
 async function renderLoadouts() {
@@ -599,8 +708,10 @@ function renderServerList() {
           (s) => `<div class="loadout">
             <h3>${escapeHtml(s.name)}</h3>
             <div class="mono">${escapeHtml(s.host)}:${s.gamePort} · rcon ${s.rconPort} · ${s.hasPassword ? 'пароль задан' : 'без пароля'}${s.demo ? ' · демо' : ''}</div>
+            <div class="mono small">ключ плагина: <code>${escapeHtml(s.pluginKey || '—')}</code></div>
             <div class="loadout-foot" style="margin-top:10px">
               <button class="btn btn-ghost btn-sm" data-ping="${escapeHtml(s.id)}">проверить</button>
+              <button class="btn btn-ghost btn-sm" data-newkey="${escapeHtml(s.id)}">новый ключ</button>
               ${s.readonly ? '' : `<button class="btn btn-ghost btn-sm btn-danger" data-del="${escapeHtml(s.id)}">удалить</button>`}
             </div>
           </div>`
@@ -612,6 +723,13 @@ function renderServerList() {
     btn.onclick = async () => {
       await api(`/api/servers/${btn.dataset.del}`, { method: 'DELETE' });
       toast('Сервер удалён', 'ok');
+      loadServers();
+    };
+  });
+  $$('[data-newkey]').forEach((btn) => {
+    btn.onclick = async () => {
+      const data = await api(`/api/servers/${btn.dataset.newkey}/plugin-key`, { method: 'POST' });
+      toast(`Новый ключ: ${data.pluginKey}`, 'ok');
       loadServers();
     };
   });
@@ -840,6 +958,7 @@ function bindUi() {
     tab.onclick = () => {
       switchTab(tab.dataset.tab);
       if (tab.dataset.tab === 'admin') loadAdmin();
+      if (tab.dataset.tab === 'equip') loadEquip();
       if (tab.dataset.tab === 'vault') loadEconomy();
       if (tab.dataset.tab === 'upgrade') { loadEconomy(); loadTargets(); loadHistory(); }
     };
@@ -984,6 +1103,7 @@ function bindUi() {
     await loadWeapons();
     await loadCatalog();
     await loadEconomy();
+    await loadEquip();
     await loadTargets();
     await loadHistory();
     await loadServers();

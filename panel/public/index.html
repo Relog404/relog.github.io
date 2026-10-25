@@ -33,13 +33,15 @@
 
   <div class="disclaimer">
     Монеты виртуальные: их нельзя купить за деньги, пополнить предметами из Steam или вывести наружу.
-    Никаких реальных ставок — только игра на фановую валюту. Скинченджеров и читов в проекте нет.
+    Никаких реальных ставок — только игра на фановую валюту.
+    Скины на сервере выдаёт сам сервер плагином, клиент игры не трогается: никаких читов и VAC-риска.
   </div>
 
   <nav class="tabs" id="tabs">
     <button class="tab" data-tab="upgrade">Апгрейд</button>
     <button class="tab active" data-tab="shop">Каталог</button>
     <button class="tab" data-tab="vault">Хранилище</button>
+    <button class="tab" data-tab="equip">Экипировка</button>
     <button class="tab" data-tab="loadouts">Мои сборки</button>
     <button class="tab" data-tab="server">Сервер</button>
     <button class="tab admin-only" data-tab="admin" hidden>Админка</button>
@@ -182,6 +184,22 @@
         <h2>Мои предметы <span class="muted small" id="vaultHint"></span></h2>
         <div class="vault-grid" id="vaultGrid"></div>
       </div>
+    </section>
+
+    <!-- ---------------------------- ЭКИПИРОВКА ---------------------------- -->
+    <section class="panel" id="tab-equip">
+      <div class="block">
+        <h2>Какие скины сервер выдаст вам в игре</h2>
+        <p class="muted small">
+          Здесь вы выбираете скины из своего хранилища. Когда вы заходите на сервер с установленным
+          плагином <code>PanelSkins</code>, он спрашивает у панели ваш набор по SteamID и применяет его
+          к вашему оружию, ножу и перчаткам — <b>на стороне сервера</b>. Клиент CS2 не модифицируется,
+          файлы игры не трогаются, VAC-риска нет: плагиновые комьюнити-серверы и так идут как insecure.
+          Скины видны только на серверах, где стоит этот плагин, и только тем, кто ими владеет на сайте.
+        </p>
+      </div>
+      <div class="equip-grid" id="equipGrid"></div>
+      <p class="muted small" id="equipHint"></p>
     </section>
 
     <!-- ------------------------------ СБОРКИ ------------------------------ -->
