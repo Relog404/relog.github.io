@@ -48,6 +48,42 @@ chmod +x install-cs2-server.sh start-cs2.sh
 sudo apt-get install -y lib32stdc++6 libstdc++6 lib32z1 libncurses5
 ```
 
+## Типичные ошибки установки
+
+### `Error! App '730' state is 0x202 after update job`
+
+Это **не** «сломанный SteamCMD» и не «нет прав». Код `0x202` у SteamCMD означает
+«обновление встало на паузу» — на практике всегда **не хватает места на диске**.
+CS2 DS — это полная игра (app 730), а не маленький серверный пакет: нужно **~65-70 ГБ**
+(Valve в своей вики пишет 65 GB storage), а не 15-20.
+
+Что делать:
+
+1. Проверьте место: `PowerShell → Get-PSDrive C` или просто «Свойства» диска.
+2. Освободите место **или** поставьте сервер на другой диск:
+   ```bat
+   install-cs2-server.bat D:\cs2-server
+   ```
+3. Просто запустите установщик ещё раз — SteamCMD **докачивает**, а не начинает с нуля.
+   Скрипт сам сделает до 3 попыток и напечатает свободное место перед каждой.
+
+Ручное обновление уже установленного сервера:
+
+```bat
+update-cs2-server.bat C:\cs2-server
+```
+
+### `Update state (0x3) reconfiguring` и тишина
+
+Это нормально: SteamCMD распаковывает десятки гигабайт. Ждите, не закрывайте окно.
+
+### Сервер не запускается после установки
+
+- Windows: запускайте `start-cs2.bat` **из каталога установки** (`C:\cs2-server\start-cs2.bat`),
+  а не из папки с репозиторием.
+- Linux: поставьте рантайм Steam:
+  `sudo apt-get install -y lib32stdc++6 libstdc++6 lib32z1 libncurses5`.
+
 ## Порты
 
 | Назначение | Протокол | Порт |
@@ -121,7 +157,9 @@ host_workshop_map 3070207XX
 
 ```
 cs2-server/
-├─ install-cs2-server.bat   # установка (Windows)
+├─ install-cs2-server.bat   # установка (Windows, с проверкой места и 3 попытками)
+├─ install-cs2-server.sh    # установка (Linux)
+├─ update-cs2-server.bat/.sh# обновление уже установленного сервера
 ├─ install-cs2-server.sh    # установка (Linux)
 ├─ start-cs2.bat / .sh      # запуск сервера
 ├─ install-plugins.bat/.ps1 # CounterStrikeSharp + Metamod
