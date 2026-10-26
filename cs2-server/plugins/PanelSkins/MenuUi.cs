@@ -17,6 +17,7 @@ public sealed class MenuUi
     private readonly MenuApi _api;
     private readonly Action<string> _log;
     private readonly Dictionary<ulong, Screen> _open = new();
+    private readonly Dictionary<ulong, string> _lastHtml = new();
 
     public MenuUi(PanelSkinsPlugin plugin, MenuApi api, Action<string> log)
     {
@@ -212,6 +213,7 @@ public sealed class MenuUi
     public void Close(CCSPlayerController player)
     {
         if (!_open.Remove(player.SteamID)) return;
+        _lastHtml.Remove(player.SteamID);
         try
         {
             player.PrintToCenterHtml(" ", 1);
@@ -332,13 +334,57 @@ public sealed class MenuUi
         hints.Add("9-закрыть");
         html.Append($"<font color='silver'>{string.Join("  ", hints)}</font>");
 
+        var markup = html.ToString();
+
         try
         {
-            player.PrintToCenterHtml(html.ToString(), 20);
+            player.PrintToCenterHtml(markup, 20);
         }
         catch
         {
             _open.Remove(player.SteamID);
+            _lastHtml.Remove(player.SteamID);
+            return;
+        }
+
+        // Центр-html в CS2 живёт пару секунд и мигает при перерисовке, поэтому
+        // то же самое меню дублируем в чат: он не гаснет и не мигает.
+        // Печатаем только когда содержимое изменилось — иначе автоперерисовка
+        // заспамит чат.
+        if (!_lastHtml.TryGetValue(player.SteamID, out var shown) || shown != markup)
+        {
+            _lastHtml[player.SteamID] = markup;
+            PrintToChat(player, screen, start, end, pages);
+        }
+    }
+
+    /** Текстовая копия меню в чате: держится на экране, пока игрок не закроет меню. */
+    private void PrintToChat(CCSPlayerController player, Screen screen, int start, int end, int pages)
+    {
+        try
+        {
+            var head = pages > 1 ? $"{screen.Title} [{screen.Page + 1}/{pages}]" : screen.Title;
+            player.PrintToChat($" {head}");
+
+            var line = new StringBuilder();
+            for (var i = start; i < end; i++)
+            {
+                if (line.Length > 0) line.Append("   ");
+                line.Append($"{i - start + 1}. {Cut(screen.Options[i].Text, 22)}");
+
+                if ((i - start + 1) % 3 == 0)
+                {
+                    player.PrintToChat($" {line}");
+                    line.Clear();
+                }
+            }
+            if (line.Length > 0) player.PrintToChat($" {line}");
+
+            player.PrintToChat(" Выбрать: цифра в чате (7-назад, 8-дальше, 9-закрыть)");
+        }
+        catch
+        {
+            // игрок вышел — нечего печатать
         }
     }
 

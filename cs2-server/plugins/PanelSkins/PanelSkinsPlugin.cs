@@ -115,7 +115,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
             {
                 if (!controller.IsValid) return;
                 BindMenuKey(controller);
-                controller.PrintToChat(" [PanelSkins] Меню скинов: F1, !menu в чате или цифры 1-9");
+                controller.PrintToChat(" [PanelSkins] Меню скинов: !menu в чате (или F1). Пункт выбирай цифрой в чате, закрыть — 9.");
             }
             catch (Exception ex)
             {
@@ -139,7 +139,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         if (!Config.BindF1Menu) return;
         try
         {
-            controller.ExecuteClientCommand("bind F1 css_menu");
+            controller.ExecuteClientCommand("bind F1 \"css_menu\"");
         }
         catch (Exception ex)
         {
@@ -180,10 +180,24 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         // игрок часто пишет "!menu\" или "!menu," — обрезаем мусор по краям
         var raw = (info.ArgString ?? "").Trim().Trim('"').Trim('\'').Trim('`').Trim();
         var word = raw.TrimStart('!', '/', '.', ',').Trim().ToLowerInvariant();
-        if (word is not ("menu" or "меню" or "менюшка" or "skins")) return HookResult.Continue;
 
-        if (player is not null && player.IsValid && !player.IsBot) _menu.OpenMain(player);
-        return HookResult.Stop;
+        if (word is ("menu" or "меню" or "менюшка" or "skins"))
+        {
+            if (player is not null && player.IsValid && !player.IsBot) _menu.OpenMain(player);
+            return HookResult.Stop;
+        }
+
+        // цифра в чате выбирает пункт. Это надёжнее перехвата slot1..slot9:
+        // кнопку игрок может нажать, когда центр-html уже погас, и тогда
+        // перехват выглядит как «цифры не работают»
+        if (player is not null && player.IsValid && !player.IsBot &&
+            int.TryParse(word, out var pick) && pick >= 1 && pick <= 9 && _menu.IsOpen(player))
+        {
+            _menu.HandleKey(player, pick);
+            return HookResult.Stop;
+        }
+
+        return HookResult.Continue;
     }
 
     /** Диагностика: видно, доходит ли плагин до панели и что она отвечает. */
