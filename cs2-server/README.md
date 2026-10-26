@@ -183,4 +183,4 @@ https://www.metamodsource.net/downloads.php?branch=stable — распакуйт
 `<сервер>\game\csgo`. Либо задайте ссылку: `set METAMOD_URL=<zip url>` перед запуском.
 
 Плагин собирается автоматически в GitHub Actions при каждом изменении
-`cs2-server/plugins/**`: готовая DLL коммитится обратно в `plugins/PanelSkins/dist/`.
+`cs2-server/plugins/**`: готовая DLL коммитится обратно в `plugins/PanelSkins/prebuilt/`.

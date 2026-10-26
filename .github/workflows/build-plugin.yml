@@ -79,7 +79,7 @@ jobs:
       - name: Сложить готовые файлы
         run: |
           set -euo pipefail
-          out=cs2-server/plugins/PanelSkins/dist
+          out=cs2-server/plugins/PanelSkins/prebuilt
           bin=cs2-server/plugins/PanelSkins/bin/Release/net10.0
           mkdir -p "$out"
           # в plugins/ кладём только саму DLL: остальное уже есть внутри CounterStrikeSharp
@@ -91,7 +91,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: PanelSkins
-          path: cs2-server/plugins/PanelSkins/dist/
+          path: cs2-server/plugins/PanelSkins/prebuilt/
           if-no-files-found: error
 
       - name: Приложить к релизу
@@ -99,7 +99,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd cs2-server/plugins/PanelSkins/dist
+          cd cs2-server/plugins/PanelSkins/prebuilt
           gh release upload "${{ github.event.release.tag_name }}" PanelSkins.dll PanelSkins.json.example panelskins.json --clobber
 
       # Готовая DLL уезжает в репозиторий: чтобы ставить плагин без .NET SDK.
@@ -109,7 +109,7 @@ jobs:
           set -euo pipefail
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add cs2-server/plugins/PanelSkins/dist
+          git add cs2-server/plugins/PanelSkins/prebuilt
           if git diff --cached --quiet; then
             echo "DLL не изменилась — коммитить нечего"
             exit 0

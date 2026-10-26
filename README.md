@@ -15,7 +15,7 @@ panel/             сайт на Node.js: RCON-панель, каталог, м�
 | Возможность | Где |
 |---|---|
 | Автоустановка сервера CS2 через SteamCMD одним батником (+ Metamod, CSSharp и готовый плагин) | `cs2-server/install-all.bat` (Windows), `install-cs2-server.sh` (Linux) |
-| Плагин PanelSkins собирается сам в GitHub Actions, готовая DLL лежит в репозитории | `.github/workflows/build-plugin.yml`, `cs2-server/plugins/PanelSkins/dist/` |
+| Плагин PanelSkins собирается сам в GitHub Actions, готовая DLL лежит в репозитории | `.github/workflows/build-plugin.yml`, `cs2-server/plugins/PanelSkins/prebuilt/` |
 | Запуск с GSLT-токеном, competitive-конфигом, GOTV | `cs2-server/start-cs2.bat`, `cfg/server.cfg` |
 | Серверные плагины (CounterStrikeSharp + Metamod) | `cs2-server/install-plugins.bat` |
 | Веб-панель: статус, игроки, смена карты, чат, RCON-консоль | `panel/` |

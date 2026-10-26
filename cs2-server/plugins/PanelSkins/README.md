@@ -28,7 +28,7 @@
 
 1. Поставьте сам сервер: `../../install-cs2-server.bat` (или `.sh`).
 2. Поставьте CounterStrikeSharp и Metamod: `../../install-plugins.bat`.
-3. Готово. `dist/PanelSkins.dll` уже собран и лежит в репозитории — .NET SDK не нужен.
+3. Готово. `prebuilt/PanelSkins.dll` уже собран и лежит в репозитории — .NET SDK не нужен.
    Установщик `install-plugins.bat` (или `install-all.bat`) кладёт его сам:
 
    - `.../addons/counterstrikesharp/plugins/PanelSkins/PanelSkins.dll`
@@ -44,7 +44,7 @@
 
 GitHub Actions (`.github/workflows/build-plugin.yml`) при каждом изменении
 `cs2-server/plugins/**` собирает плагин и **кладёт готовую DLL обратно в репозиторий**
-(`dist/PanelSkins.dll`). Артефакт `PanelSkins` можно скачать из любого запуска,
+(`prebuilt/PanelSkins.dll`). Артефакт `PanelSkins` можно скачать из любого запуска,
 а при создании релиза файлы прикладываются к нему автоматически.
 
 Если всё же нужно собрать руками — нужен **.NET 10 SDK** (плагин под CounterStrikeSharp 1.0.3xx):

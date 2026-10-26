@@ -95,24 +95,24 @@ Write-Host ""
 Write-Host "== PanelSkins (серверный скинченджер) ==" -ForegroundColor Cyan
 
 $pluginSrc = Join-Path $PSScriptRoot 'plugins\PanelSkins'
-$distDll   = Join-Path $pluginSrc 'dist\PanelSkins.dll'
+$dll       = Join-Path $pluginSrc 'prebuilt\PanelSkins.dll'
 $pluginDst = Join-Path $CsgoDir 'addons\counterstrikesharp\plugins\PanelSkins'
 $gamedataDst = Join-Path $CsgoDir 'addons\counterstrikesharp\gamedata'
 
 # готовой сборки в репозитории нет (например, скачали только исходники) — тянем её с GitHub
-if (-not (Test-Path $distDll)) {
+if (-not (Test-Path $dll)) {
     try {
         Write-Host "   готовой DLL рядом нет — скачиваем сборку с GitHub"
-        New-Item -ItemType Directory -Path (Split-Path $distDll) -Force | Out-Null
-        $dllUrl = 'https://raw.githubusercontent.com/Relog404/relog.github.io/main/cs2-server/plugins/PanelSkins/dist/PanelSkins.dll'
-        Invoke-WebRequest -Uri $dllUrl -OutFile $distDll
+        New-Item -ItemType Directory -Path (Split-Path $dll) -Force | Out-Null
+        $dllUrl = 'https://raw.githubusercontent.com/Relog404/relog.github.io/main/cs2-server/plugins/PanelSkins/prebuilt/PanelSkins.dll'
+        Invoke-WebRequest -Uri $dllUrl -OutFile $dll
     } catch {
         Write-Host "   скачать не удалось: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
 # если DLL так и нет — пробуем собрать сами (нужен .NET 10 SDK)
-if (-not (Test-Path $distDll)) {
+if (-not (Test-Path $dll)) {
     $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
     if ($dotnet) {
         try {
@@ -121,8 +121,8 @@ if (-not (Test-Path $distDll)) {
             dotnet build -c Release
             $built = Join-Path $pluginSrc 'bin\Release\net10.0\PanelSkins.dll'
             if (Test-Path $built) {
-                New-Item -ItemType Directory -Path (Split-Path $distDll) -Force | Out-Null
-                Copy-Item $built $distDll -Force
+                New-Item -ItemType Directory -Path (Split-Path $dll) -Force | Out-Null
+                Copy-Item $built $dll -Force
             }
         } catch {
             Write-Host "   сборка не удалась: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -135,9 +135,9 @@ if (-not (Test-Path $distDll)) {
     }
 }
 
-if (Test-Path $distDll) {
+if (Test-Path $dll) {
     New-Item -ItemType Directory -Path $pluginDst -Force | Out-Null
-    Copy-Item $distDll (Join-Path $pluginDst 'PanelSkins.dll') -Force
+    Copy-Item $dll (Join-Path $pluginDst 'PanelSkins.dll') -Force
 
     $cfgDst = Join-Path $pluginDst 'PanelSkins.json'
     if (-not (Test-Path $cfgDst)) {
