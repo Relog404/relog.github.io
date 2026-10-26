@@ -37,7 +37,7 @@ public sealed class PanelApiClient : IDisposable
             using var response = await _http.SendAsync(request);
             if (!response.IsSuccessStatusCode)
             {
-                _log($"[PanelSkins] панель ответила {(int)response.StatusCode} на {url}");
+                _log($"панель ответила {(int)response.StatusCode} на {url}");
                 return null;
             }
 

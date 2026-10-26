@@ -349,13 +349,14 @@ if "%KEY_OK%"=="ok" (
 )
 
 
-rem свежий конфиг копируется из примера — проверим, что ключ в нём поменяли
 rem ключ плагина = тот же, что знает панель, иначе /api/plugin/loadout вернёт 401
+rem  Ключ пишем туда, откуда его реально читает CSSharp версии 1.0.3xx:
+rem  addons\counterstrikesharp\configs\plugins\PanelSkins\PanelSkins.json
 if not "%PLUGIN_KEY%"=="" (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%PLUGIN_DST%\PanelSkins.json'; $j=[IO.File]::ReadAllText($f) | ConvertFrom-Json; $j.PanelUrl='http://127.0.0.1:3000'; $j.PluginKey='%PLUGIN_KEY%'; [IO.File]::WriteAllText($f,($j | ConvertTo-Json -Depth 6),(New-Object System.Text.UTF8Encoding($false)))"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$key='%PLUGIN_KEY%'; $url='http://127.0.0.1:3000'; foreach ($p in @('%PLUGIN_CFG_DST%\PanelSkins.json','%PLUGIN_DST%\PanelSkins.json')) { $d=[IO.Path]::GetDirectoryName($p); if (-not [IO.Directory]::Exists($d)) { [IO.Directory]::CreateDirectory($d) | Out-Null }; $j=$null; if ([IO.File]::Exists($p)) { try { $j=[IO.File]::ReadAllText($p) | ConvertFrom-Json } catch { $j=$null } }; if ($null -eq $j) { $j=[pscustomobject]@{} }; $j.PluginKey=$key; $j.PanelUrl=$url; [IO.File]::WriteAllText($p,($j | ConvertTo-Json -Depth 6),(New-Object System.Text.UTF8Encoding($false))) }; $t='%PLUGIN_CFG_DST%\PanelSkins.toml'; if ([IO.File]::Exists($t)) { Remove-Item $t -Force }"
     set "KEY_WRITTEN=no"
-    for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "$j=[IO.File]::ReadAllText('%PLUGIN_DST%\PanelSkins.json') ^| ConvertFrom-Json; if ($j.PluginKey -eq '%PLUGIN_KEY%') { 'ok' } else { 'no' }"`) do set "KEY_WRITTEN=%%K"
-    if "!KEY_WRITTEN!"=="ok" (echo        ключ плагина прописан в PanelSkins.json) else (echo        ВНИМАНИЕ: ключ в PanelSkins.json не прописался - плагин получит 401)
+    for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "$j=[IO.File]::ReadAllText('%PLUGIN_CFG_DST%\PanelSkins.json') ^| ConvertFrom-Json; if ($j.PluginKey -eq '%PLUGIN_KEY%') { 'ok' } else { 'no' }"`) do set "KEY_WRITTEN=%%K"
+    if "!KEY_WRITTEN!"=="ok" (echo        ключ прописан: %PLUGIN_CFG_DST%) else (echo        ВНИМАНИЕ: ключ не прописался в %PLUGIN_CFG_DST% - плагин получит 401)
 ) else (
     echo        ВНИМАНИЕ: ключ плагина пуст - плагин получит 401
 )
@@ -438,6 +439,7 @@ set "CS2_EXE=%GAME_DIR%\game\bin\win64\cs2.exe"
 set "CSGO_DIR=%GAME_DIR%\game\csgo"
 set "CFG_DIR=%CSGO_DIR%\cfg"
 set "PLUGIN_DST=%CSGO_DIR%\addons\counterstrikesharp\plugins\PanelSkins"
+set "PLUGIN_CFG_DST=%CSGO_DIR%\addons\counterstrikesharp\configs\plugins\PanelSkins"
 set "GAMEDATA_DST=%CSGO_DIR%\addons\counterstrikesharp\gamedata"
 exit /b 0
 

@@ -334,7 +334,7 @@ public sealed class MenuUi
 
         try
         {
-            player.PrintToCenterHtml(html.ToString(), 6);
+            player.PrintToCenterHtml(html.ToString(), 20);
         }
         catch
         {

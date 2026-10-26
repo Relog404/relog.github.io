@@ -152,7 +152,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
     private void OnTick()
     {
-        if (++_ticks < 192) return; // примерно каждые 3 секунды
+        if (++_ticks < 768) return; // примерно раз в 12 секунд: чаще — меню мигает
         _ticks = 0;
         _menu.Refresh();
     }
@@ -176,8 +176,10 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
     private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
     {
-        var text = (info.ArgString ?? "").Trim().Trim('"').Trim().ToLowerInvariant();
-        if (text is not ("!menu" or "/menu" or "!меню" or "/меню" or "!менюшка" or "!skins" or "/skins")) return HookResult.Continue;
+        // игрок часто пишет "!menu\" или "!menu," — обрезаем мусор по краям
+        var raw = (info.ArgString ?? "").Trim().Trim('"').Trim('\'').Trim('`').Trim();
+        var word = raw.TrimStart('!', '/', '.', ',').Trim().ToLowerInvariant();
+        if (word is not ("menu" or "меню" or "менюшка" or "skins")) return HookResult.Continue;
 
         if (player is not null && player.IsValid && !player.IsBot) _menu.OpenMain(player);
         return HookResult.Stop;
