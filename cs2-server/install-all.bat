@@ -53,7 +53,7 @@ echo   2) Start the server:  %INSTALL_DIR%\start-cs2.bat
 echo   3) In the server console: css_plugins list
 echo      PanelSkins must be there, and the console must show
 echo      [PanelSkins] PanelSkins loaded
-echo   4) The web panel itself is started separately: panel\install-windows.bat
+echo   4) The web panel itself is started separately: panel\start-windows.bat
 echo --------------------------------------------
 echo.
 echo Metamod:Source sometimes has to be downloaded by hand (no stable direct link):
