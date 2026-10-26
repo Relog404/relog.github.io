@@ -109,3 +109,24 @@ curl -H "X-Plugin-Key: ВАШ_КЛЮЧ" \
   "agentCt": null, "agentT": null, "music": null
 }
 ```
+
+## Проверка после запуска
+
+В консоли сервера по очереди:
+
+```
+meta list            <- должен показать CounterStrikeSharp
+css_plugins list     <- должен показать PanelSkins
+```
+
+Если `meta list` пишет «Unknown command» — Metamod не загружен. Проверьте три вещи:
+
+1. сервер запущен с **`-insecure`** (без него движок включает VAC secure mode и плагины не грузит);
+2. в `<сервер>\game\csgo\gameinfo.gi` есть строка **`Game    csgo/addons/metamod`**
+   (после `Game_LowViolence    csgo_lv`); `install-plugins.ps1` добавляет её сам;
+3. на Windows установлен **Visual C++ Redistributable x64**:
+   https://aka.ms/vs/17/release/vc_redist.x64.exe — без него CounterStrikeSharp не стартует.
+
+Если `meta list` показывает CounterStrikeSharp, а `css_plugins list` пуст —
+значит DLL не там: она должна лежать в
+`addons\counterstrikesharp\plugins\PanelSkins\PanelSkins.dll`.

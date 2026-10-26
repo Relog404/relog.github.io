@@ -229,6 +229,8 @@ if "%GSLT%"=="" set "ARGS=%ARGS% +sv_lan 1"
 echo.
 echo   Карта: %MAP%   Порт: %PORT%   Игроков: %MAXPLAYERS%
 echo   Проверка плагинов в консоли:  meta list   и   css_plugins list
+echo   Если плагинов нет — установите Visual C++ Redistributable x64:
+echo       https://aka.ms/vs/17/release/vc_redist.x64.exe
 echo   Чтобы остановить — закройте окно или наберите quit
 echo  ============================================================
 echo.
