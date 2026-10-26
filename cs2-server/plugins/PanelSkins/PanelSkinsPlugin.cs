@@ -149,6 +149,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
     /** Перерисовка открытых меню: сообщение в центре экрана живёт несколько секунд. */
     private int _ticks;
+    private bool _skinAppliedLogged;
 
     private void OnTick()
     {
@@ -302,7 +303,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
             if (isKnife)
             {
                 if (Config.ApplyKnife && loadout.Knife is { } knife)
-                    SkinApplier.ApplyKnife(weapon, knife, Config.DefaultWear, Config.DefaultSeed);
+                    SkinApplier.ApplyKnife(weapon, knife, Config.DefaultWear, Config.DefaultSeed, (uint)(controller.SteamID & 0xFFFFFFFF));
                 return;
             }
 
@@ -310,7 +311,14 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
                 w.Def > 0 ? w.Def == itemDef : false);
 
             if (skin is null) return;
-            SkinApplier.ApplyWeapon(weapon, skin, Config.DefaultWear, Config.DefaultSeed);
+            SkinApplier.ApplyWeapon(weapon, skin, Config.DefaultWear, Config.DefaultSeed, (uint)(controller.SteamID & 0xFFFFFFFF));
+
+            // один раз за запуск: видно, что покраска вообще происходит
+            if (!_skinAppliedLogged)
+            {
+                _skinAppliedLogged = true;
+                Log($"скин наложен: {controller.PlayerName} / {designer} (def {itemDef}) -> paint {skin.Paint}");
+            }
 
             if (Config.Debug)
                 Log($"{controller.PlayerName}: {designer} -> paint {skin.Paint}, def {skin.Def}");

@@ -45,7 +45,7 @@ public sealed class PanelSkinsConfig : BasePluginConfig
     /// Скины видны и без него — через FallbackPaintKit/Seed/Wear.
     /// </summary>
     [JsonPropertyName("ApplyAttributes")]
-    public bool ApplyAttributes { get; set; } = false;
+    public bool ApplyAttributes { get; set; } = true;
 
     /// <summary>Писать в консоль сервера отладочную информацию.</summary>
     [JsonPropertyName("Debug")]

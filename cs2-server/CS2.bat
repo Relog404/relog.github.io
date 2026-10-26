@@ -356,10 +356,16 @@ if not "%PLUGIN_KEY%"=="" (
 rem  ВАЖНО: только эти два пути. Рекурсивный поиск PanelSkins.json внутри
 rem  addons\counterstrikesharp находил gamedata\panelskins.json (в Windows регистр
 rem  не важен) и затирал его - CSSharp потом не мог загрузить gamedata.
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$key='%PLUGIN_KEY%'; $url='http://127.0.0.1:3000'; foreach ($p in @('%PLUGIN_CFG_DST%\PanelSkins.json','%PLUGIN_DST%\PanelSkins.json')) { $d=[IO.Path]::GetDirectoryName($p); if (-not [IO.Directory]::Exists($d)) { [IO.Directory]::CreateDirectory($d) | Out-Null }; $h=@{}; if ([IO.File]::Exists($p)) { try { $j=Get-Content $p -Raw | ConvertFrom-Json; if ($null -ne $j) { foreach ($pr in $j.PSObject.Properties) { $h[$pr.Name]=$pr.Value } } } catch { $h=@{} } }; $h['PluginKey']=$key; $h['PanelUrl']=$url; [IO.File]::WriteAllText($p,($h | ConvertTo-Json -Depth 6),(New-Object System.Text.UTF8Encoding($false))) }; $t='%PLUGIN_CFG_DST%\PanelSkins.toml'; if ([IO.File]::Exists($t)) { Remove-Item $t -Force }"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$key='%PLUGIN_KEY%'; $url='http://127.0.0.1:3000'; foreach ($p in @('%PLUGIN_CFG_DST%\PanelSkins.json','%PLUGIN_DST%\PanelSkins.json')) { $d=[IO.Path]::GetDirectoryName($p); if (-not [IO.Directory]::Exists($d)) { [IO.Directory]::CreateDirectory($d) | Out-Null }; $h=@{}; if ([IO.File]::Exists($p)) { try { $j=Get-Content $p -Raw | ConvertFrom-Json; if ($null -ne $j) { foreach ($pr in $j.PSObject.Properties) { $h[$pr.Name]=$pr.Value } } } catch { $h=@{} } }; $h['PluginKey']=$key; $h['PanelUrl']=$url; if (-not $h.ContainsKey('ApplyAttributes')) { $h['ApplyAttributes']=$true }; [IO.File]::WriteAllText($p,($h | ConvertTo-Json -Depth 6),(New-Object System.Text.UTF8Encoding($false))) }; $t='%PLUGIN_CFG_DST%\PanelSkins.toml'; if ([IO.File]::Exists($t)) { Remove-Item $t -Force }"
     set "KEY_WRITTEN=no"
     for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "$key='%PLUGIN_KEY%'; $ok='no'; foreach ($p in @('%PLUGIN_CFG_DST%\PanelSkins.json','%PLUGIN_DST%\PanelSkins.json')) { if ([IO.File]::Exists($p)) { try { $j=Get-Content $p -Raw | ConvertFrom-Json; if ($j.PluginKey -eq $key) { $ok='ok' } } catch { } } }; $ok"`) do set "KEY_WRITTEN=%%K"
     if "!KEY_WRITTEN!"=="ok" (echo        ключ прописан: %PLUGIN_CFG_DST%) else (echo        ВНИМАНИЕ: ключ не прописался в %PLUGIN_CFG_DST% - плагин получит 401)
+set "ATTRS_ON=no"
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "$p='%PLUGIN_CFG_DST%\PanelSkins.json'; $r='no'; if ([IO.File]::Exists($p)) { try { $j=Get-Content $p -Raw | ConvertFrom-Json; if ($j.ApplyAttributes -eq $true) { $r='yes' } } catch { } }; $r"`) do set "ATTRS_ON=%%A"
+if "!ATTRS_ON!"=="no" (
+    echo        ВНИМАНИЕ: в PanelSkins.json выключены атрибуты покраски - скины могут не появиться.
+    echo        Откройте %PLUGIN_CFG_DST%\PanelSkins.json и поставьте "ApplyAttributes": true
+)
 ) else (
     echo        ВНИМАНИЕ: ключ плагина пуст - плагин получит 401
 )
