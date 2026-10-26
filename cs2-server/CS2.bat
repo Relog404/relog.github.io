@@ -106,21 +106,40 @@ echo        игра на месте: %CS2_EXE%
 
 rem --------------------- [4/7] Metamod + CSSharp ----------------
 echo [4/7] Проверяю Metamod и CounterStrikeSharp...
-if not exist "%CSGO_DIR%\addons\counterstrikesharp" (
-    echo        ставлю плагиновую обвязку ^(Metamod + CounterStrikeSharp^)...
-    powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install-plugins.ps1" -InstallDir "%INSTALL_DIR%"
-)
-if not exist "%CSGO_DIR%\addons\metamod" (
-    echo.
-    echo   ВНИМАНИЕ: папка addons\metamod не найдена — CounterStrikeSharp без него не работает.
-    echo   Скачайте архив тут: https://www.metamodsource.net/downloads.php?branch=stable
-    echo   и распакуйте его в %CSGO_DIR%
-    echo.
-) else (
-    echo        metamod на месте
+set "NEED_PLUGINS=0"
+set "GI_OK=0"
+if not exist "%CSGO_DIR%\addons\counterstrikesharp" set "NEED_PLUGINS=1"
+if not exist "%CSGO_DIR%\addons\metamod" set "NEED_PLUGINS=1"
+if exist "%CSGO_DIR%\gameinfo.gi" findstr /c:"addons/metamod" "%CSGO_DIR%\gameinfo.gi" >nul 2>&1 && set "GI_OK=1"
+if "%GI_OK%"=="0" set "NEED_PLUGINS=1"
+if "%NEED_PLUGINS%"=="1" goto install_plugins
+goto gi_check
+
+:install_plugins
+echo        ставлю Metamod + CounterStrikeSharp и правлю gameinfo.gi...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install-plugins.ps1" -InstallDir "%INSTALL_DIR%"
+
+:gi_check
+rem Metamod подключается ТОЛЬКО через gameinfo.gi — без этой строки он молчит
+set "GI_OK=0"
+if exist "%CSGO_DIR%\gameinfo.gi" findstr /c:"addons/metamod" "%CSGO_DIR%\gameinfo.gi" >nul 2>&1 && set "GI_OK=1"
+if "%GI_OK%"=="1" goto gi_ok
+echo        ВНИМАНИЕ: в gameinfo.gi нет addons/metamod — плагины не загрузятся.
+echo        Откройте %CSGO_DIR%\gameinfo.gi и добавьте после Game_LowViolence csgo_lv:
+echo            Game    csgo/addons/metamod
+goto cfg_extra
+
+:gi_ok
+echo        metamod прописан в gameinfo.gi
+
+:cfg_extra
+rem этот конфиг игра выполняет ПОСЛЕ своего gamemode_competitive.cfg — убирает ботов
+if exist "%SCRIPT_DIR%cfg\gamemode_competitive_server.cfg" (
+    if not exist "%CSGO_DIR%\cfg" mkdir "%CSGO_DIR%\cfg"
+    copy /y "%SCRIPT_DIR%cfg\gamemode_competitive_server.cfg" "%CSGO_DIR%\cfg\gamemode_competitive_server.cfg" >nul
+    echo        gamemode_competitive_server.cfg установлен ^(боты выключены^)
 )
 
-rem --------------------- [5/7] плагин PanelSkins ----------------
 echo [5/7] Проверяю плагин PanelSkins...
 set "PLUGIN_SRC=%SCRIPT_DIR%plugins\PanelSkins"
 set "PLUGIN_DST=%CSGO_DIR%\addons\counterstrikesharp\plugins\PanelSkins"
@@ -209,7 +228,7 @@ if "%GSLT%"=="" set "ARGS=%ARGS% +sv_lan 1"
 
 echo.
 echo   Карта: %MAP%   Порт: %PORT%   Игроков: %MAXPLAYERS%
-echo   Команды в консоли сервера:  status   css_plugins list   quit
+echo   Проверка плагинов в консоли:  meta list   и   css_plugins list
 echo   Чтобы остановить — закройте окно или наберите quit
 echo  ============================================================
 echo.

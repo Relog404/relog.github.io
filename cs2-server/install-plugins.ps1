@@ -90,6 +90,44 @@ try {
     Write-Host "   or re-run with:  install-plugins.bat -MetamodUrl <zip url>" -ForegroundColor Yellow
 }
 
+# --------------------- gameinfo.gi: подключаем Metamod ---------------------
+# Без этой правки движок про Metamod даже не узнает: в консоли не будет
+# ни "meta list", ни плагинов, хотя папки лежат на месте.
+Write-Host ""
+Write-Host "== gameinfo.gi ==" -ForegroundColor Cyan
+
+$gameinfo = Join-Path $CsgoDir 'gameinfo.gi'
+if (Test-Path $gameinfo) {
+    $gi = Get-Content $gameinfo -Raw
+    if ($gi -match 'csgo[\\/]addons[\\/]metamod') {
+        Write-Host "   metamod уже прописан" -ForegroundColor Green
+    } else {
+        Copy-Item $gameinfo "$gameinfo.bak" -Force
+        $new = $gi -replace '(?m)^(\s*Game_LowViolence\s+csgo_lv\s*)$', '$1' + "`n`t`tGame`t`tcsgo/addons/metamod"
+        if ($new -eq $gi) {
+            # нет строки Game_LowViolence — вставим сразу после SearchPaths {
+            $new = $gi -replace '(?ms)(SearchPaths\s*\{)', '$1' + "`n`t`tGame`t`tcsgo/addons/metamod"
+        }
+        if ($new -eq $gi) {
+            Write-Host "   не нашёл блок SearchPaths — допишите в gameinfo.gi вручную:" -ForegroundColor Yellow
+            Write-Host "       Game    csgo/addons/metamod" -ForegroundColor Yellow
+        } else {
+            Set-Content -Path $gameinfo -Value $new -Encoding UTF8
+            Write-Host "   gameinfo.gi: добавлен путь csgo/addons/metamod (бэкап: gameinfo.gi.bak)" -ForegroundColor Green
+        }
+    }
+} else {
+    Write-Host "   gameinfo.gi не найден — Metamod без него не загрузится" -ForegroundColor Yellow
+}
+
+# конфиг, который игра выполняет ПОСЛЕ своего gamemode_competitive.cfg
+$gamemodeCfg = Join-Path $CsgoDir 'cfg\gamemode_competitive_server.cfg'
+if (Test-Path (Join-Path $PSScriptRoot 'cfg\gamemode_competitive_server.cfg')) {
+    New-Item -ItemType Directory -Path (Join-Path $CsgoDir 'cfg') -Force | Out-Null
+    Copy-Item (Join-Path $PSScriptRoot 'cfg\gamemode_competitive_server.cfg') $gamemodeCfg -Force
+    Write-Host "   cfg\gamemode_competitive_server.cfg установлен" -ForegroundColor Green
+}
+
 # --------------------------- PanelSkins ---------------------------
 Write-Host ""
 Write-Host "== PanelSkins (серверный скинченджер) ==" -ForegroundColor Cyan
@@ -152,10 +190,13 @@ if (Test-Path $dll) {
 
 Write-Host ""
 Write-Host "==== Next steps ====" -ForegroundColor Cyan
-Write-Host "1) Check that $CsgoDir\addons\metamod exists (Metamod) and $CsgoDir\addons\counterstrikesharp (CSSharp)."
-Write-Host "2) Fill in $CsgoDir\addons\counterstrikesharp\plugins\PanelSkins\PanelSkins.json (PanelUrl + PluginKey)."
-Write-Host "3) Start the server: $InstallDir\start-cs2.bat"
-Write-Host "4) In server console:  css_plugins list  (PanelSkins must be in the list)"
+Write-Host "1) On Windows install Visual C++ Redistributable (x64) or CSSharp will not start:"
+Write-Host "   https://aka.ms/vs/17/release/vc_redist.x64.exe"
+Write-Host "2) Check that $CsgoDir\addons\metamod exists (Metamod) and $CsgoDir\addons\counterstrikesharp (CSSharp)."
+Write-Host "   gameinfo.gi must contain the line:  Game    csgo/addons/metamod"
+Write-Host "3) Fill in $CsgoDir\addons\counterstrikesharp\plugins\PanelSkins\PanelSkins.json (PanelUrl + PluginKey)."
+Write-Host "4) Start the server: $InstallDir\start-cs2.bat"
+Write-Host "5) In server console:  meta list  (CounterStrikeSharp) and  css_plugins list  (PanelSkins)"
 Write-Host ""
 Write-Host "Plugins are server-side only: the server will be marked 'insecure' (VAC disabled on it) -"
 Write-Host "that is the normal, officially tolerated mode for community servers with plugins."

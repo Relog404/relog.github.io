@@ -21,7 +21,7 @@ set "MAXPLAYERS=10"
 
 set "ARGS=-dedicated -console -usercon -insecure -port %PORT% -maxplayers_override %MAXPLAYERS%"
 set "ARGS=%ARGS% +map %MAP% +game_type %GAME_TYPE% +game_mode %GAME_MODE%"
-set "ARGS=%ARGS% +maxplayers %MAXPLAYERS% +bot_quota 0"
+set "ARGS=%ARGS% +bot_quota 0"
 set "ARGS=%ARGS% +rcon_password %RCON_PASSWORD% +sv_password %SERVER_PASSWORD%"
 set "ARGS=%ARGS% +exec server.cfg"
 
