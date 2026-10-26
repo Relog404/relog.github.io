@@ -30,41 +30,14 @@ permissions:
 
 jobs:
   build:
-    name: Сборка PanelSkins (.NET 8)
+    name: Сборка PanelSkins (.NET 10)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
-
-      # Ссылаемся на те же DLL, что реально лежат на сервере:
-      # скачиваем официальный релиз CounterStrikeSharp.
-      - name: Скачать CounterStrikeSharp
-        id: css
-        run: |
-          set -euo pipefail
-          version="${{ inputs.css_version }}"
-          if [ -z "$version" ]; then
-            version=$(curl -fsSL https://api.github.com/repos/roflmuffin/CounterStrikeSharp/releases/latest \
-              | grep '"tag_name"' | head -1 | sed 's/.*"v\?\([0-9.]*\)".*/\1/')
-          fi
-          echo "версия CSSharp: $version"
-          url="https://github.com/roflmuffin/CounterStrikeSharp/releases/download/v${version}/counterstrikesharp-windows-${version}.zip"
-          mkdir -p .cssharp
-          if curl -fsSL -o .cssharp/css.zip "$url"; then
-            (cd .cssharp && unzip -q css.zip)
-            shared=$(find .cssharp -type d -name shared -path '*counterstrikesharp*' | head -1)
-            api=$(find .cssharp -name 'CounterStrikeSharp.API.dll' | head -1)
-            if [ -n "$api" ]; then
-              echo "refs=$(dirname "$api")/" >> "$GITHUB_OUTPUT"
-              echo "версия=$version" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-          fi
-          echo "скачать не вышло — соберём из NuGet"
-          echo "refs=" >> "$GITHUB_OUTPUT"
+          dotnet-version: '10.0.x'
 
       - name: Собрать плагин
         id: build
@@ -72,39 +45,20 @@ jobs:
           set -uo pipefail
           cd cs2-server/plugins/PanelSkins
           rm -f build.log
-          if [ -n "${{ steps.css.outputs.refs }}" ]; then
-            echo "== сборка по DLL из релиза CSSharp ==" | tee -a build.log
-            dotnet build -c Release -p:CSSharpRefs="${{ steps.css.outputs.refs }}" 2>&1 | tee -a build.log
-            if [ -f bin/Release/net8.0/PanelSkins.dll ]; then exit ${PIPESTATUS[0]}; fi
-          fi
-          echo "== сборка из NuGet ==" | tee -a build.log
           dotnet build -c Release 2>&1 | tee -a build.log
           exit ${PIPESTATUS[0]}
-
-      - name: Отправить лог сборки в PR
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -uo pipefail
-          {
-            echo "### Лог сборки PanelSkins"
-            echo ""
-            echo "\`\`\`"
-            find . -name 'build.log' -exec cat {} \; 2>/dev/null | tail -c 50000
-            echo "\`\`\`"
-          } > /tmp/report.md
-          gh pr comment 1 --repo "${{ github.repository }}" --body-file /tmp/report.md || true
 
       - name: Сложить готовые файлы
         run: |
           set -euo pipefail
           out=cs2-server/plugins/PanelSkins/dist
           mkdir -p "$out"
-          cp cs2-server/plugins/PanelSkins/bin/Release/net8.0/PanelSkins.dll "$out/"
-          [ -f cs2-server/plugins/PanelSkins/bin/Release/net8.0/PanelSkins.deps.json ] \
-            && cp cs2-server/plugins/PanelSkins/bin/Release/net8.0/PanelSkins.deps.json "$out/" || true
+          bin=$(find cs2-server/plugins/PanelSkins/bin/Release -name 'PanelSkins.dll' | head -1)
+          echo "собралось: $bin"
+          cp "$bin" "$out/"
+          cp "$(dirname "$bin")/PanelSkins.deps.json" "$out/" 2>/dev/null || true
           cp cs2-server/plugins/PanelSkins/config.example.json "$out/PanelSkins.json.example"
+          cp cs2-server/plugins/PanelSkins/gamedata/panelskins.json "$out/"
           ls -l "$out"
 
       - uses: actions/upload-artifact@v4
@@ -119,7 +73,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd cs2-server/plugins/PanelSkins/dist
-          gh release upload "${{ github.event.release.tag_name }}" PanelSkins.dll PanelSkins.deps.json PanelSkins.json.example --clobber
+          gh release upload "${{ github.event.release.tag_name }}" PanelSkins.dll PanelSkins.deps.json PanelSkins.json.example panelskins.json --clobber
 
       # Готовая DLL уезжает в репозиторий: чтобы ставить плагин без .NET SDK.
       - name: Закоммитить DLL в ветку
