@@ -21,6 +21,32 @@ public sealed class PanelApiClient : IDisposable
         _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("PanelSkins", "1.0"));
     }
 
+    /// <summary>
+    /// Диагностика: какой код ответила панель. 200 - всё в порядке,
+    /// 401 - не подходит ключ, 400 - ключ верный, но нет SteamID (никого на сервере),
+    /// -1 - панель недоступна, -2 - не задан адрес панели.
+    /// </summary>
+    public async Task<int> ProbeAsync(ulong steamId64)
+    {
+        var baseUrl = (_getPanelUrl() ?? "").TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(baseUrl)) return -2;
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/plugin/loadout/{steamId64}");
+        var key = _getPluginKey();
+        if (!string.IsNullOrWhiteSpace(key)) request.Headers.TryAddWithoutValidation("X-Plugin-Key", key);
+
+        try
+        {
+            using var response = await _http.SendAsync(request);
+            return (int)response.StatusCode;
+        }
+        catch (Exception ex)
+        {
+            _log($"панель недоступна: {ex.Message}");
+            return -1;
+        }
+    }
+
     /// <summary>GET {PanelUrl}/api/plugin/loadout/{steamId} с ключом плагина в заголовке.</summary>
     public async Task<LoadoutResponse?> FetchLoadoutAsync(ulong steamId64)
     {

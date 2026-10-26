@@ -206,6 +206,30 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
         _ = Task.Run(async () =>
         {
+            // сначала честно спрашиваем, какой код ответила панель:
+            // 400 — ключ верный, но на сервере никого нет и SteamID взять неоткуда
+            var code = await _api.ProbeAsync(steamId);
+            if (code == 401)
+            {
+                Log("ключ не подходит: панель отдала 401. Запусти CS2.bat заново — он пропишет свежий ключ.");
+                return;
+            }
+            if (code == 400)
+            {
+                Log("ключ верный, но SteamID пуст: на сервере никого нет. Зайди в игру и повтори css_panelcheck.");
+                return;
+            }
+            if (code < 0)
+            {
+                Log("панель не запущена или не отвечает: подними её через CS2.bat или panel\\start-windows.bat.");
+                return;
+            }
+            if (code != 200)
+            {
+                Log($"панель ответила {code}: проверь адрес в PanelSkins.json.");
+                return;
+            }
+
             MenuState? state = null;
             LoadoutResponse? loadout = null;
             try
@@ -219,7 +243,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
             }
 
             Log(state is null
-                ? $"панель НЕ отвечает или не пускает (проверь адрес и ключ). SteamID {steamId}"
+                ? "меню: панель не отдала данные"
                 : $"панель отвечает: монеты {state.Coins}, кейсов {state.Cases?.Count ?? 0}, вещей в инвентаре {state.Inventory?.Count ?? 0}");
             Log(loadout is null
                 ? "набор скинов пуст: на сайте ничего не надето, либо панель не отдала данные"
