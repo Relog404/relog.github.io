@@ -69,7 +69,7 @@ jobs:
           print('все Windows-скрипты с CRLF')
           PY
 
-      - name: .bat: метки существуют, окно не закроется само, вывод не в пайп
+      - name: ".bat: метки существуют, окно не закроется само, вывод не в пайп"
         run: |
           python3 - <<'PY'
           import pathlib, re, sys
