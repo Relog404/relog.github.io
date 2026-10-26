@@ -28,27 +28,33 @@
 
 1. Поставьте сам сервер: `../../install-cs2-server.bat` (или `.sh`).
 2. Поставьте CounterStrikeSharp и Metamod: `../../install-plugins.bat`.
-3. Соберите плагин (нужен .NET 8 SDK):
+3. Готово. `dist/PanelSkins.dll` уже собран и лежит в репозитории — .NET SDK не нужен.
+   Установщик `install-plugins.bat` (или `install-all.bat`) кладёт его сам:
 
-   ```bat
-   cd cs2-server\plugins\PanelSkins
-   dotnet build -c Release ^
-     -p:CSSharpRefs="C:\cs2-server\game\csgo\addons\counterstrikesharp\shared\"
-   ```
+   - `.../addons/counterstrikesharp/plugins/PanelSkins/PanelSkins.dll`
+   - `.../addons/counterstrikesharp/plugins/PanelSkins/PanelSkins.json` (конфиг)
+   - `.../addons/counterstrikesharp/gamedata/panelskins.json` (сигнатура движка)
 
-   На Linux:
+   В `PanelSkins.json` укажите `PanelUrl` и `PluginKey`. Ключ берётся в админке панели:
+   вкладка «Настройки» → «новый ключ» у нужного сервера (либо задайте общий
+   `PLUGIN_API_KEY` в `.env`).
+4. Перезапустите сервер. В консоли должно появиться `[PanelSkins] PanelSkins загружен`.
 
-   ```bash
-   dotnet build -c Release \
-     -p:CSSharpRefs="$HOME/cs2-server/game/csgo/addons/counterstrikesharp/shared/"
-   ```
+### Плагин собирается сам
 
-4. Скопируйте `bin/Release/net8.0/PanelSkins.dll` в
-   `<сервер>/game/csgo/addons/counterstrikesharp/plugins/PanelSkins/PanelSkins.dll`
-5. Положите рядом `config.example.json` как `PanelSkins.json`, укажите `PanelUrl` и `PluginKey`.
-   Ключ берётся в админке панели: вкладка «Настройки» → «новый ключ» у нужного сервера
-   (либо задайте общий `PLUGIN_API_KEY` в `.env`).
-6. Перезапустите сервер. В консоли должно появиться `[PanelSkins] PanelSkins загружен`.
+GitHub Actions (`.github/workflows/build-plugin.yml`) при каждом изменении
+`cs2-server/plugins/**` собирает плагин и **кладёт готовую DLL обратно в репозиторий**
+(`dist/PanelSkins.dll`). Артефакт `PanelSkins` можно скачать из любого запуска,
+а при создании релиза файлы прикладываются к нему автоматически.
+
+Если всё же нужно собрать руками — нужен **.NET 10 SDK** (плагин под CounterStrikeSharp 1.0.3xx):
+
+```bash
+cd cs2-server/plugins/PanelSkins
+dotnet build -c Release
+# или по DLL установленного сервера:
+dotnet build -c Release -p:CSSharpRefs="C:\cs2-server\game\csgo\addons\counterstrikesharp\api\"
+```
 
 ## Команды
 
@@ -67,35 +73,19 @@
 
 ## Если не собирается
 
-Плагин написан под CounterStrikeSharp 1.0.х (API 200+). Имена schema-членов между версиями
-CSSharp иногда меняются, и тогда компилятор ругается на строки в `SkinApplier.cs`. Варианты:
+Плагин собран под **CounterStrikeSharp 1.0.377+ (net10.0)** — это то, что скачивает
+`install-plugins.bat`. Если у вас более старая версия CSSharp, обновите её.
 
-**Вариант A** (в коде):
+Атрибуты покраски ставятся нативной функцией движка
+`CAttributeList::SetOrAddAttributeValueByName` — управляемого API для них в новых версиях
+CSSharp нет. Сигнатура лежит в `gamedata/panelskins.json` и должна лежать в
+`addons/counterstrikesharp/gamedata/`. Если после обновления CS2 плагин падает при
+покраске — значит Valve сдвинула функцию: возьмите свежую сигнатуру, например, из
+[cs2-WeaponPaints](https://github.com/Nereziel/cs2-WeaponPaints) (файл
+`gamedata/weaponpaints.json`), и замените её в `gamedata/panelskins.json`.
 
-```csharp
-item.NetworkedDynamicAttributes.Attributes.SetOrAddAttributeValue("paint kit", skin.Paint);
-```
-
-**Вариант B** — если у `CEconItemView` нет `NetworkedDynamicAttributes`:
-
-```csharp
-using CounterStrikeSharp.API.Modules.Memory;
-
-item.SetAttributeValue("paint kit", skin.Paint);
-item.SetAttributeValue("paint wear", skin.Wear);
-item.SetAttributeValue("paint seed", skin.Seed);
-```
-
-**Вариант C** — через список атрибутов напрямую:
-
-```csharp
-var list = item.NetworkedDynamicAttributes.Attributes;
-list.SetOrAddAttributeValueByName("paint kit", skin.Paint);
-```
-
-Если не находится `pawn.EconGloves` — замените `SkinApplier.ApplyGloves` на вариант через
-`pawn.EconGloves` → `pawn.EconGloves.ItemDefinitionIndex` или вовсе отключите перчатки
-(`"ApplyGloves": false` в конфиге) — оружие и нож будут работать.
+Если перчатки не красятся, отключите их в конфиге (`"ApplyGloves": false`) —
+оружие и нож будут работать.
 
 Готовый и регулярно обновляемый аналог, если не хочется собирать самому:
 [cs2-WeaponPaints](https://github.com/Nereziel/cs2-WeaponPaints) — там свой формат данных,

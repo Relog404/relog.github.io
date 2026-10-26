@@ -74,11 +74,72 @@ if ($MetamodUrl) {
     Write-Host "   3) or re-run this script with:  set METAMOD_URL=<zip url>  before it"
 }
 
+# --------------------------- PanelSkins ---------------------------
+Write-Host ""
+Write-Host "== PanelSkins (серверный скинченджер) ==" -ForegroundColor Cyan
+
+$pluginSrc = Join-Path $PSScriptRoot 'plugins\PanelSkins'
+$distDll   = Join-Path $pluginSrc 'dist\PanelSkins.dll'
+$pluginDst = Join-Path $CsgoDir 'addons\counterstrikesharp\plugins\PanelSkins'
+$gamedataDst = Join-Path $CsgoDir 'addons\counterstrikesharp\gamedata'
+
+# готовой сборки в репозитории нет (например, скачали только исходники) — тянем её с GitHub
+if (-not (Test-Path $distDll)) {
+    try {
+        Write-Host "   готовой DLL рядом нет — скачиваем сборку с GitHub"
+        New-Item -ItemType Directory -Path (Split-Path $distDll) -Force | Out-Null
+        $dllUrl = 'https://raw.githubusercontent.com/Relog404/relog.github.io/main/cs2-server/plugins/PanelSkins/dist/PanelSkins.dll'
+        Invoke-WebRequest -Uri $dllUrl -OutFile $distDll
+    } catch {
+        Write-Host "   скачать не удалось: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+# если DLL так и нет — пробуем собрать сами (нужен .NET 10 SDK)
+if (-not (Test-Path $distDll)) {
+    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($dotnet) {
+        try {
+            Write-Host "   собираем плагин из исходников (dotnet build)"
+            Push-Location $pluginSrc
+            dotnet build -c Release
+            $built = Join-Path $pluginSrc 'bin\Release\net10.0\PanelSkins.dll'
+            if (Test-Path $built) {
+                New-Item -ItemType Directory -Path (Split-Path $distDll) -Force | Out-Null
+                Copy-Item $built $distDll -Force
+            }
+        } catch {
+            Write-Host "   сборка не удалась: $($_.Exception.Message)" -ForegroundColor Yellow
+        } finally {
+            Pop-Location
+        }
+    } else {
+        Write-Host "   .NET SDK не найден и готовой DLL нет — поставьте .NET 10 SDK или возьмите" -ForegroundColor Yellow
+        Write-Host "   готовую сборку: https://github.com/Relog404/relog.github.io/actions (артефакт PanelSkins)" -ForegroundColor Yellow
+    }
+}
+
+if (Test-Path $distDll) {
+    New-Item -ItemType Directory -Path $pluginDst -Force | Out-Null
+    Copy-Item $distDll (Join-Path $pluginDst 'PanelSkins.dll') -Force
+
+    $cfgDst = Join-Path $pluginDst 'PanelSkins.json'
+    if (-not (Test-Path $cfgDst)) {
+        Copy-Item (Join-Path $pluginSrc 'config.example.json') $cfgDst -Force
+        Write-Host "   создан конфиг $cfgDst — укажите в нём PanelUrl и PluginKey" -ForegroundColor Yellow
+    }
+
+    New-Item -ItemType Directory -Path $gamedataDst -Force | Out-Null
+    Copy-Item (Join-Path $pluginSrc 'gamedata\panelskins.json') (Join-Path $gamedataDst 'panelskins.json') -Force
+    Write-Host "   плагин установлен: $pluginDst" -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "==== Next steps ====" -ForegroundColor Cyan
 Write-Host "1) Check that $CsgoDir\addons\metamod exists (Metamod) and $CsgoDir\addons\counterstrikesharp (CSSharp)."
-Write-Host "2) Start the server: $InstallDir\start-cs2.bat"
-Write-Host "3) In server console:  css_plugins list"
+Write-Host "2) Fill in $CsgoDir\addons\counterstrikesharp\plugins\PanelSkins\PanelSkins.json (PanelUrl + PluginKey)."
+Write-Host "3) Start the server: $InstallDir\start-cs2.bat"
+Write-Host "4) In server console:  css_plugins list  (PanelSkins must be in the list)"
 Write-Host ""
 Write-Host "Plugins are server-side only: the server will be marked 'insecure' (VAC disabled on it) -"
 Write-Host "that is the normal, officially tolerated mode for community servers with plugins."

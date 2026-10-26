@@ -165,3 +165,22 @@ cs2-server/
 ├─ install-plugins.bat/.ps1 # CounterStrikeSharp + Metamod
 └─ cfg/server.cfg           # базовый конфиг сервера
 ```
+
+
+## Установка в один клик
+
+```bat
+install-all.bat
+```
+
+Скрипт сам: скачает SteamCMD и поставит CS2 (app 730), скачает CounterStrikeSharp,
+положит **уже собранный** плагин `PanelSkins` (DLL лежит в репозитории, .NET не нужен),
+напишет `server.cfg` и `start-cs2.bat`. Останется только указать адрес панели и ключ
+в `PanelSkins.json`.
+
+Метамод иногда приходится скачивать руками (у него нет стабильной прямой ссылки):
+https://www.metamodsource.net/downloads.php?branch=stable — распакуйте архив в
+`<сервер>\game\csgo`. Либо задайте ссылку: `set METAMOD_URL=<zip url>` перед запуском.
+
+Плагин собирается автоматически в GitHub Actions при каждом изменении
+`cs2-server/plugins/**`: готовая DLL коммитится обратно в `plugins/PanelSkins/dist/`.

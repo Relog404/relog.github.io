@@ -82,8 +82,8 @@ jobs:
           out=cs2-server/plugins/PanelSkins/dist
           bin=cs2-server/plugins/PanelSkins/bin/Release/net10.0
           mkdir -p "$out"
+          # в plugins/ кладём только саму DLL: остальное уже есть внутри CounterStrikeSharp
           cp "$bin/PanelSkins.dll" "$out/"
-          cp "$bin/PanelSkins.deps.json" "$out/" 2>/dev/null || true
           cp cs2-server/plugins/PanelSkins/config.example.json "$out/PanelSkins.json.example"
           cp cs2-server/plugins/PanelSkins/gamedata/panelskins.json "$out/"
           ls -l "$out"
@@ -100,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd cs2-server/plugins/PanelSkins/dist
-          gh release upload "${{ github.event.release.tag_name }}" PanelSkins.dll PanelSkins.deps.json PanelSkins.json.example panelskins.json --clobber
+          gh release upload "${{ github.event.release.tag_name }}" PanelSkins.dll PanelSkins.json.example panelskins.json --clobber
 
       # Готовая DLL уезжает в репозиторий: чтобы ставить плагин без .NET SDK.
       - name: Закоммитить DLL в ветку
