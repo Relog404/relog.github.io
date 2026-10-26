@@ -155,13 +155,19 @@ goto gi_check
 :install_plugins
 echo        ставлю Metamod + CounterStrikeSharp и правлю gameinfo.gi...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install-plugins.ps1" -InstallDir "%INSTALL_DIR%"
+if errorlevel 1 echo        установщик плагинов завершился с ошибкой — текст выше
 
 :gi_check
 rem Metamod подключается ТОЛЬКО через gameinfo.gi — без этой строки он молчит
 set "GI_OK=0"
 if exist "%CSGO_DIR%\gameinfo.gi" findstr /c:"addons/metamod" "%CSGO_DIR%\gameinfo.gi" >nul 2>&1 && set "GI_OK=1"
 if "%GI_OK%"=="1" goto gi_ok
-echo        ВНИМАНИЕ: в gameinfo.gi нет addons/metamod — плагины не загрузятся.
+echo        правлю gameinfo.gi сам...
+call :patchgi
+set "GI_OK=0"
+if exist "%CSGO_DIR%\gameinfo.gi" findstr /c:"addons/metamod" "%CSGO_DIR%\gameinfo.gi" >nul 2>&1 && set "GI_OK=1"
+if "%GI_OK%"=="1" goto gi_ok
+echo        ВНИМАНИЕ: не вышло — сделайте руками.
 echo        Откройте %CSGO_DIR%\gameinfo.gi и добавьте после Game_LowViolence csgo_lv:
 echo            Game    csgo/addons/metamod
 goto cfg_extra
@@ -314,6 +320,12 @@ set "FREEG=0"
 for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "[math]::Floor((Get-PSDrive -Name '%~1').Free/1GB)" 2^>nul`) do set "FREEG=%%A"
 if not defined FREEG set "FREEG=0"
 if "%FREEG%"=="" set "FREEG=0"
+exit /b 0
+
+rem вставляет "Game    csgo/addons/metamod" в gameinfo.gi (страховка, если install-plugins.ps1 не отработал)
+:patchgi
+if not exist "%CSGO_DIR%\gameinfo.gi" exit /b 0
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$gi='%CSGO_DIR%\gameinfo.gi'; $t=[IO.File]::ReadAllText($gi); if ($t -notmatch 'addons/metamod') { [IO.File]::WriteAllText($gi+'.bak',$t); $nl=[string][char]10; $tb=[string][char]9; $r='$1'+$nl+$tb+$tb+'Game'+$tb+$tb+'csgo/addons/metamod'; $n=[regex]::Replace($t,'(?m)^(\s*Game_LowViolence\s+csgo_lv\s*)$',$r); if ($n -eq $t) { $n=[regex]::Replace($t,'(?ms)(SearchPaths\s*\{)','$1'+$nl+$tb+$tb+'Game'+$tb+$tb+'csgo/addons/metamod') }; [IO.File]::WriteAllText($gi,$n) }"
 exit /b 0
 
 :showdrives

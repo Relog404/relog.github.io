@@ -1,4 +1,4 @@
-# =============================================================
+﻿# =============================================================
 #  CounterStrikeSharp / Metamod:Source installer for CS2 (Windows)
 #  Run directly:  powershell -ExecutionPolicy Bypass -File install-plugins.ps1 -InstallDir C:\cs2-server
 # =============================================================
@@ -45,7 +45,7 @@ function Install-FromZip {
 # ---------------------- CounterStrikeSharp ----------------------
 try {
     $release = Invoke-RestMethod 'https://api.github.com/repos/roflmuffin/CounterStrikeSharp/releases/latest'
-    # сборка «with-runtime» содержит внутри .NET — ничего ставить руками не надо
+    # сборка "with-runtime" содержит внутри .NET - ничего ставить руками не надо
     $asset = $release.assets | Where-Object { $_.name -like '*with-runtime*windows*.zip' } | Select-Object -First 1
     if (-not $asset) {
         $asset = $release.assets | Where-Object { $_.name -like '*.zip' -and $_.name -match 'windows' } | Select-Object -First 1
@@ -105,11 +105,11 @@ if (Test-Path $gameinfo) {
         Copy-Item $gameinfo "$gameinfo.bak" -Force
         $new = $gi -replace '(?m)^(\s*Game_LowViolence\s+csgo_lv\s*)$', '$1' + "`n`t`tGame`t`tcsgo/addons/metamod"
         if ($new -eq $gi) {
-            # нет строки Game_LowViolence — вставим сразу после SearchPaths {
+            # нет строки Game_LowViolence - вставим сразу после SearchPaths {
             $new = $gi -replace '(?ms)(SearchPaths\s*\{)', '$1' + "`n`t`tGame`t`tcsgo/addons/metamod"
         }
         if ($new -eq $gi) {
-            Write-Host "   не нашёл блок SearchPaths — допишите в gameinfo.gi вручную:" -ForegroundColor Yellow
+            Write-Host "   не нашёл блок SearchPaths - допишите в gameinfo.gi вручную:" -ForegroundColor Yellow
             Write-Host "       Game    csgo/addons/metamod" -ForegroundColor Yellow
         } else {
             Set-Content -Path $gameinfo -Value $new -Encoding UTF8
@@ -117,7 +117,7 @@ if (Test-Path $gameinfo) {
         }
     }
 } else {
-    Write-Host "   gameinfo.gi не найден — Metamod без него не загрузится" -ForegroundColor Yellow
+    Write-Host "   gameinfo.gi не найден - Metamod без него не загрузится" -ForegroundColor Yellow
 }
 
 # конфиг, который игра выполняет ПОСЛЕ своего gamemode_competitive.cfg
@@ -137,10 +137,10 @@ $dll       = Join-Path $pluginSrc 'prebuilt\PanelSkins.dll'
 $pluginDst = Join-Path $CsgoDir 'addons\counterstrikesharp\plugins\PanelSkins'
 $gamedataDst = Join-Path $CsgoDir 'addons\counterstrikesharp\gamedata'
 
-# готовой сборки в репозитории нет (например, скачали только исходники) — тянем её с GitHub
+# готовой сборки в репозитории нет (например, скачали только исходники) - тянем её с GitHub
 if (-not (Test-Path $dll)) {
     try {
-        Write-Host "   готовой DLL рядом нет — скачиваем сборку с GitHub"
+        Write-Host "   готовой DLL рядом нет - скачиваем сборку с GitHub"
         New-Item -ItemType Directory -Path (Split-Path $dll) -Force | Out-Null
         $dllUrl = 'https://raw.githubusercontent.com/Relog404/relog.github.io/main/cs2-server/plugins/PanelSkins/prebuilt/PanelSkins.dll'
         Invoke-WebRequest -Uri $dllUrl -OutFile $dll
@@ -149,7 +149,7 @@ if (-not (Test-Path $dll)) {
     }
 }
 
-# если DLL так и нет — пробуем собрать сами (нужен .NET 10 SDK)
+# если DLL так и нет - пробуем собрать сами (нужен .NET 10 SDK)
 if (-not (Test-Path $dll)) {
     $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
     if ($dotnet) {
@@ -168,7 +168,7 @@ if (-not (Test-Path $dll)) {
             Pop-Location
         }
     } else {
-        Write-Host "   .NET SDK не найден и готовой DLL нет — поставьте .NET 10 SDK или возьмите" -ForegroundColor Yellow
+        Write-Host "   .NET SDK не найден и готовой DLL нет - поставьте .NET 10 SDK или возьмите" -ForegroundColor Yellow
         Write-Host "   готовую сборку: https://github.com/Relog404/relog.github.io/actions (артефакт PanelSkins)" -ForegroundColor Yellow
     }
 }
@@ -180,7 +180,7 @@ if (Test-Path $dll) {
     $cfgDst = Join-Path $pluginDst 'PanelSkins.json'
     if (-not (Test-Path $cfgDst)) {
         Copy-Item (Join-Path $pluginSrc 'config.example.json') $cfgDst -Force
-        Write-Host "   создан конфиг $cfgDst — укажите в нём PanelUrl и PluginKey" -ForegroundColor Yellow
+        Write-Host "   создан конфиг $cfgDst - укажите в нём PanelUrl и PluginKey" -ForegroundColor Yellow
     }
 
     New-Item -ItemType Directory -Path $gamedataDst -Force | Out-Null
