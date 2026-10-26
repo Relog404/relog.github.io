@@ -1,8 +1,8 @@
 name: Build CS2 plugin
 
 on:
+  # триггерится на любой ветке: так сборка работает и в PR, и в рабочей ветке
   push:
-    branches: [main]
     paths:
       - 'cs2-server/plugins/**'
       - '.github/workflows/build-plugin.yml'
@@ -102,7 +102,7 @@ jobs:
 
       # Готовая DLL уезжает в репозиторий: чтобы ставить плагин без .NET SDK.
       - name: Закоммитить DLL в ветку
-        if: github.event_name == 'workflow_dispatch' && inputs.commit_dll
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.commit_dll)
         run: |
           set -euo pipefail
           git config user.name  'github-actions[bot]'
