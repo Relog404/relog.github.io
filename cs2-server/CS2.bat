@@ -370,6 +370,9 @@ if "%GSLT%"=="" set "ARGS=%ARGS% +sv_lan 1"
 
 echo.
 echo   Карта: %MAP%   Порт: %PORT%   Игроков: %MAXPLAYERS%
+echo   Панель ^(сайт^) : http://localhost:3000 — открывать в браузере
+echo   Сервер CS2    : порт %PORT% — в браузере не открывается,
+echo                   заходить из игры: connect 127.0.0.1:%PORT%
 echo   Проверка плагинов в консоли:  meta list   и   css_plugins list
 echo   VAC отключён (-insecure): игроки с VAC-баном заходят
 echo   Выкидывает с «ошибкой переполнения»? В консоли игры: rate 786432 и fps_max 300
@@ -463,7 +466,7 @@ rem  Панель должна отвечать ДО старта сервера
 set "PANEL_OK=0"
 for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 3 -UseBasicParsing; $r.StatusCode } catch { 0 }" 2^>nul`) do set "PANEL_OK=%%A"
 if "%PANEL_OK%"=="200" (
-    echo        панель отвечает на 127.0.0.1:3000
+    echo        панель отвечает: сайт http://localhost:3000
     exit /b 0
 )
 where node >nul 2>&1
@@ -482,7 +485,8 @@ timeout /t 5 /nobreak >nul
 set "PANEL_OK=0"
 for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 3 -UseBasicParsing; $r.StatusCode } catch { 0 }" 2^>nul`) do set "PANEL_OK=%%A"
 if "%PANEL_OK%"=="200" (
-    echo        панель поднялась ^(через %WAITED% сек^)
+    echo        панель поднялась ^(через %WAITED% сек^), сайт: http://localhost:3000
+    start "" http://localhost:3000
     exit /b 0
 )
 if %WAITED% LSS 60 goto panel_wait
