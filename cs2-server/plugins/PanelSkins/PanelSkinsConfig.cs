@@ -20,6 +20,10 @@ public sealed class PanelSkinsConfig : BasePluginConfig
     [JsonPropertyName("CacheSeconds")]
     public int CacheSeconds { get; set; } = 120;
 
+    /// <summary>Вешать ли игроку <c>bind F1 css_menu</c> и писать подсказку в чат.</summary>
+    [JsonPropertyName("BindF1Menu")]
+    public bool BindF1Menu { get; set; } = true;
+
     [JsonPropertyName("ApplyKnife")]
     public bool ApplyKnife { get; set; } = true;
 

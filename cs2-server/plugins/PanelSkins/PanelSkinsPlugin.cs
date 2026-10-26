@@ -38,6 +38,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         RegisterListener<Listeners.OnClientDisconnectPost>(OnClientDisconnect);
 
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
+        RegisterEventHandler<EventPlayerActivate>(OnPlayerActivate);
 
         AddCommand("css_menu", "Меню скинов (по F1)", OnMenuCommand);
         AddCommand("css_skins", "Ссылка на сайт со скинами", OnSkinsCommand);
@@ -77,17 +78,6 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         if (steamId <= 0) return;
 
         _ = RefreshLoadoutAsync(steamId);
-
-        // F1 = меню скинов. Бинд ставится на стороне клиента при каждом входе.
-        try
-        {
-            controller.ExecuteClientCommand("bind F1 css_menu");
-            controller.PrintToChat(" [PanelSkins] Меню скинов — F1 (или !css_menu)");
-        }
-        catch (Exception ex)
-        {
-            Log($"не удалось повесить F1: {ex.Message}");
-        }
     }
 
     private void OnClientDisconnect(int playerSlot)
@@ -95,6 +85,30 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         var controller = Utilities.GetPlayerFromSlot(playerSlot);
         if (controller is null) return;
         _cache.Remove(controller.SteamID);
+    }
+
+    /** F1 вешаем только когда игрок уже в игре: на подключении движок к этому не готов. */
+    private HookResult OnPlayerActivate(EventPlayerActivate @event, GameEventInfo info)
+    {
+        var controller = @event.Userid;
+        if (controller is null || !controller.IsValid || controller.IsBot) return HookResult.Continue;
+        if (!Config.BindF1Menu) return HookResult.Continue;
+
+        Server.NextFrame(() =>
+        {
+            try
+            {
+                if (!controller.IsValid) return;
+                controller.ExecuteClientCommand("bind F1 css_menu");
+                controller.PrintToChat(" [PanelSkins] Меню скинов — F1 (или !css_menu)");
+            }
+            catch (Exception ex)
+            {
+                Log($"не удалось повесить F1: {ex.Message}");
+            }
+        });
+
+        return HookResult.Continue;
     }
 
     private void OnEntityCreated(CEntityInstance entity)

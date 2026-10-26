@@ -380,6 +380,7 @@ if exist "%CODE_FILE%" del /q "%CODE_FILE%" >nul 2>&1
 set "CODE=%ERRORLEVEL%"
 (echo EXITCODE:%CODE%)>"%CODE_FILE%"
 >>"%TRACE%" 2>nul echo [7/7] сервер остановлен, код %CODE% %DATE% %TIME%
+if not "%CODE%"=="0" call :dumpengine
 if "%CODE%"=="0" goto finished
 if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
     set /a RESTARTS+=1
@@ -390,6 +391,13 @@ if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
 )
 
 :finished
+if not "%CODE%"=="0" (
+    echo.
+    echo   Сервер завершился с кодом %CODE% - так быть не должно.
+    echo   Если он падает, когда заходит игрок, проверь плагин:
+    echo     переименуй папку %PLUGIN_DST% в PanelSkins_off и запусти снова.
+    echo   Не падает без плагина - пришли мне cs2-bat.log.
+)
 echo.
 echo   ---- последние 25 строк лога ----
 powershell -NoProfile -Command "Get-Content -LiteralPath '%TRACE%' -Tail 25 -ErrorAction SilentlyContinue"
@@ -436,4 +444,13 @@ echo        свободно по дискам:
 for /f "usebackq tokens=1,2 delims==" %%A in (`powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem ^| Where-Object { $_.Free -gt 0 } ^| Sort-Object -Property Free -Descending ^| ForEach-Object { $_.Name + '=' + [math]::Floor($_.Free/1GB) }" 2^>nul`) do (
     echo          %%A: %%B ГБ
 )
+exit /b 0
+
+:dumpengine
+rem  сервер упал - снимем хвост его последнего лога в cs2-bat.log
+set "ENGINE_LOG="
+for /f "delims=" %%F in ('dir /b /o-d "%CSGO_DIR%\logs\*.log" 2^>nul') do if not defined ENGINE_LOG set "ENGINE_LOG=%CSGO_DIR%\logs\%%F"
+if not defined ENGINE_LOG exit /b 0
+>>"%TRACE%" 2>nul echo ---- хвост лога движка: %ENGINE_LOG% ----
+powershell -NoProfile -Command "Get-Content -LiteralPath '%ENGINE_LOG%' -Tail 40 -ErrorAction SilentlyContinue" >>"%TRACE%" 2>nul
 exit /b 0
