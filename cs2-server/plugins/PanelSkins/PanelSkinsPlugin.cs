@@ -153,7 +153,10 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
     private void OnTick()
     {
-        if (++_ticks < 768) return; // примерно раз в 12 секунд: чаще — меню мигает
+        var every = Config.MenuRefreshSeconds;
+        if (every <= 0) return; // перерисовка выключена — меню остаётся в чате
+
+        if (++_ticks < every * 64) return; // в тиках: 64 тика — это секунда
         _ticks = 0;
         _menu.Refresh();
     }

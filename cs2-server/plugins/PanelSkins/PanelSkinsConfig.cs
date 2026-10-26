@@ -21,6 +21,15 @@ public sealed class PanelSkinsConfig : BasePluginConfig
     public int CacheSeconds { get; set; } = 120;
 
     /// <summary>Вешать ли игроку <c>bind F1 css_menu</c> и писать подсказку в чат.</summary>
+    /// <summary>
+    /// Как часто перерисовывать меню в центре экрана, в секундах.
+    /// Центр-html в CS2 сам гаснет через 1-2 секунды, поэтому меню приходится
+    /// рисовать заново — отсюда мигание. 0 — не перерисовывать: меню останется
+    /// только в чате (оно там не гаснет), зато на экране ничего не мигает.
+    /// </summary>
+    [JsonPropertyName("MenuRefreshSeconds")]
+    public int MenuRefreshSeconds { get; set; } = 12;
+
     [JsonPropertyName("BindF1Menu")]
     public bool BindF1Menu { get; set; } = true;
 
