@@ -59,6 +59,16 @@ for %%D in (C D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
 :path_known
 call :setpaths
 
+rem весь вывод сервера пишем в файл: если он закроется, будет видно почему
+set "LOG_DIR=%INSTALL_DIR%\logs"
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
+set "STAMP="
+for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm-ss"`) do set "STAMP=%%T"
+if not defined STAMP set "STAMP=%RANDOM%"
+set "LOG_FILE=%LOG_DIR%\cs2-%STAMP%.log"
+set "CODE_FILE=%LOG_DIR%\exitcode.tmp"
+set "TEE=powershell -NoProfile -Command "$sw=[IO.File]::AppendText('%LOG_FILE%'); $sw.AutoFlush=$true; try { $input | ForEach-Object { Write-Output $_; $sw.WriteLine($_) } } finally { $sw.Close() }""
+
 echo.
 echo  ============================================================
 echo   CS2 сервер + скины с панели — всё в одном файле
@@ -323,16 +333,19 @@ echo   Карта: %MAP%   Порт: %PORT%   Игроков: %MAXPLAYERS%
 echo   Проверка плагинов в консоли:  meta list   и   css_plugins list
 echo   Если плагинов нет — установите Visual C++ Redistributable x64:
 echo       https://aka.ms/vs/17/release/vc_redist.x64.exe
+echo   Лог сервера : %LOG_FILE%
 echo   Чтобы остановить — закройте окно или наберите quit
 echo  ============================================================
 echo.
 
 set "RESTARTS=0"
+(echo === CS2 запуск %DATE% %TIME% : %ARGS%)>>"%LOG_FILE%"
 
 :launch
-"%CS2_EXE%" %ARGS%
-set "CODE=%ERRORLEVEL%"
-
+if exist "%CODE_FILE%" del /q "%CODE_FILE%" >nul 2>&1
+( "%CS2_EXE%" %ARGS% 2>&1 & (echo EXITCODE:!ERRORLEVEL!)>"%CODE_FILE%" ) | %TEE%
+set "CODE=0"
+if exist "%CODE_FILE%" for /f "usebackq tokens=2 delims=:" %%C in ("%CODE_FILE%") do set "CODE=%%C"
 if "%CODE%"=="0" goto finished
 if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
     set /a RESTARTS+=1
@@ -344,7 +357,12 @@ if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
 
 :finished
 echo.
-echo   Сервер остановлен. Логи: %CSGO_DIR%\logs
+echo   ---- последние 25 строк лога ----
+powershell -NoProfile -Command "Get-Content -LiteralPath '%LOG_FILE%' -Tail 25 -ErrorAction SilentlyContinue"
+echo   --------------------------------
+echo.
+echo   Полный лог: %LOG_FILE%
+echo   Логи движка: %CSGO_DIR%\logs
 pause
 endlocal
 exit /b 0
