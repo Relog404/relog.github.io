@@ -1,4 +1,6 @@
 @echo off
+rem окно не закроется само: весь запуск идёт внутри cmd /k
+if not defined CS2BAT_GUARD (echo [%~nx0] start... & set "CS2BAT_GUARD=1" & "%COMSPEC%" /k ""%~f0" %*" & pause & exit /b)
 rem =============================================================
 rem  Веб-панель CS2 — запуск в один клик (Windows)
 rem  Нужен Node.js 20+: https://nodejs.org

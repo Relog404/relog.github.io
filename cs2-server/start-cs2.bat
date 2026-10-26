@@ -8,6 +8,13 @@ rem  do not load at all (the game keeps VAC secure mode on).
 rem
 rem  Вывод сервера дублируется в logs\cs2-console.log
 rem =============================================================
+rem =============================================================
+rem  СТРАХОВКА: запуск идёт внутри cmd /k, поэтому окно не может
+rem  закрыться само — любая ошибка останется на экране.
+rem =============================================================
+if not defined CS2BAT_GUARD (echo [start-cs2.bat] start... & set "CS2BAT_GUARD=1" & "%COMSPEC%" /k ""%~f0" %*" & pause & exit /b)
+set "TRACE=%~dp0cs2-bat.log"
+>>"%TRACE%" 2>nul echo === start-cs2.bat старт %DATE% %TIME%
 chcp 65001 >nul 2>&1
 setlocal EnableExtensions EnableDelayedExpansion
 
@@ -34,7 +41,7 @@ set "LOG_DIR=%~dp0logs"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 set "LOG_FILE=%LOG_DIR%\cs2-console.log"
 set "CODE_FILE=%LOG_DIR%\exitcode.tmp"
-set "TEE=powershell -NoProfile -Command "$sw=[IO.File]::AppendText('%LOG_FILE%'); $sw.AutoFlush=$true; try { $input | ForEach-Object { Write-Output $_; $sw.WriteLine($_) } } finally { $sw.Close() }""
+rem консоль сервера идёт прямо в окно (пайп в powershell гасил окно)
 
 set "ARGS=-dedicated -console -usercon -insecure -port %PORT% -maxplayers_override %MAXPLAYERS%"
 set "ARGS=%ARGS% +map %MAP% +game_type %GAME_TYPE% +game_mode %GAME_MODE%"
@@ -55,15 +62,19 @@ echo Лог: %LOG_FILE%
 (echo === CS2 запуск %DATE% %TIME% : %ARGS%)>>"%LOG_FILE%"
 
 if exist "%CODE_FILE%" del /q "%CODE_FILE%" >nul 2>&1
-( "%GAME_DIR%\game\bin\win64\cs2.exe" %ARGS% 2>&1 & (echo EXITCODE:!ERRORLEVEL!)>"%CODE_FILE%" ) | %TEE%
-set "CODE=0"
-if exist "%CODE_FILE%" for /f "usebackq tokens=2 delims=:" %%C in ("%CODE_FILE%") do set "CODE=%%C"
+"%GAME_DIR%\game\bin\win64\cs2.exe" %ARGS%
+set "CODE=%ERRORLEVEL%"
+(echo EXITCODE:%CODE%)>"%CODE_FILE%"
+>>"%TRACE%" 2>nul echo сервер остановлен, код %CODE% %DATE% %TIME%
 
 echo.
 echo   ---- последние 25 строк лога ----
-powershell -NoProfile -Command "Get-Content -LiteralPath '%LOG_FILE%' -Tail 25 -ErrorAction SilentlyContinue"
+powershell -NoProfile -Command "Get-Content -LiteralPath '%TRACE%' -Tail 25 -ErrorAction SilentlyContinue"
 echo   --------------------------------
-echo   Сервер остановлен ^(код %CODE%^). Полный лог: %LOG_FILE%
+echo   Сервер остановлен ^(код %CODE%^).
+echo   Лог запуска: %TRACE%
+echo.
+echo   Окно остаётся открытым специально — закрыть его можно крестиком.
 pause
 
 endlocal

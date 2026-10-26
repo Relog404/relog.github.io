@@ -11,28 +11,35 @@ rem  Путь к серверу запоминается в файле cs2-path.
 rem  поэтому при следующем двойном клике он снова использует его.
 rem  Если на диске по умолчанию мало места — сам выберет диск, где место есть.
 rem =============================================================
+rem =============================================================
+rem  СТРАХОВКА ОТ «ОКНО ЗАКРЫЛОСЬ САМО»
+rem  Весь запуск идёт внутри cmd /k: если дальше случится любая
+rem  ошибка (или файл окажется битым) — окно ОСТАНЕТСЯ с текстом
+rem  ошибки, а не исчезнет. Раньше вывод уходил в пайп powershell,
+rem  и любой сбой пайпа гасил окно без единой строчки на экране.
+rem =============================================================
+if not defined CS2BAT_GUARD (echo [CS2.bat] start... & set "CS2BAT_GUARD=1" & "%COMSPEC%" /k ""%~f0" %*" & pause & exit /b)
+
+rem  куда пишем, как далеко дошёл запуск (пригодится, если окно всё же закроют)
+set "TRACE=%~dp0cs2-bat.log"
+>>"%TRACE%" 2>nul echo === CS2.bat старт %DATE% %TIME%
 chcp 65001 >nul 2>&1
+>>"%TRACE%" 2>nul echo [0/7] кодировка консоли переключена
 setlocal EnableExtensions EnableDelayedExpansion
 title CS2 сервер + скинченджер
 
-rem  файл должен быть с CRLF: с LF cmd ломается на блоках и закрывается сам.
+rem  файл должен быть с CRLF: с LF cmd ломается на метках goto и сам закрывается.
 rem  Проверка однострочная, чтобы сработала даже в таком битом файле.
 set "EOL_CHECK="
-for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "$b=[IO.File]::ReadAllBytes('%~f0'); $crlf=0; $lf=0; for($i=0;$i -lt $b.Length;$i++){ if($b[$i] -eq 10){ if($i -gt 0 -and $b[$i-1] -eq 13){$crlf++} else {$lf++} } }; if($lf -gt $crlf){ 'LF' } else { 'CRLF' }"`) do set "EOL_CHECK=%%A"
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command \"$t=[IO.File]::ReadAllText('%~f0'); $n=([regex]::Matches($t,[string][char]10)).Count; $r=([regex]::Matches($t,[string][char]13+[string][char]10)).Count; if($n -gt $r){'LF'}else{'CRLF'}\"`) do set "EOL_CHECK=%%A"
 if "%EOL_CHECK%"=="LF" echo.
 if "%EOL_CHECK%"=="LF" echo   ВНИМАНИЕ: CS2.bat сохранён с переводами строк LF - cmd закрывается сам.
 if "%EOL_CHECK%"=="LF" echo   Пересохраняю этот файл с CRLF и запускаю заново...
-if "%EOL_CHECK%"=="LF" powershell -NoProfile -Command "$p='%~f0'; $t=[IO.File]::ReadAllText($p); [IO.File]::WriteAllText($p,($t -replace "`r?`n","`r`n"),(New-Object System.Text.UTF8Encoding($false)))"
+if "%EOL_CHECK%"=="LF" powershell -NoProfile -Command \"$p='%~f0'; $t=[IO.File]::ReadAllText($p); [IO.File]::WriteAllText($p,($t -replace \"`r?`n\",\"`r`n\"),(New-Object System.Text.UTF8Encoding($false)))\"
 if "%EOL_CHECK%"=="LF" start "" "%~f0" %*
 if "%EOL_CHECK%"=="LF" exit /b
 
-rem  весь вывод этого файла дублируем в cs2-bat.log: окно может закрыться,
-rem  а причина должна остаться на диске
-if not defined CS2BAT_LOGGING (
-    set "CS2BAT_LOGGING=1"
-    "%~f0" %* 2>&1 | powershell -NoProfile -Command "$sw=[IO.File]::AppendText('%~dp0cs2-bat.log'); $sw.AutoFlush=$true; try { $input | ForEach-Object { Write-Output $_; $sw.WriteLine($_) } } finally { $sw.Close() }"
-    exit /b
-)
+>>"%TRACE%" 2>nul echo [0/7] файл проверен, переводы строк в порядке
 
 rem ------------------------- НАСТРОЙКИ -------------------------
 set "SCRIPT_DIR=%~dp0"
@@ -86,7 +93,7 @@ for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "Get-Date -For
 if not defined STAMP set "STAMP=%RANDOM%"
 set "LOG_FILE=%LOG_DIR%\cs2-%STAMP%.log"
 set "CODE_FILE=%LOG_DIR%\exitcode.tmp"
-set "TEE=powershell -NoProfile -Command "$sw=[IO.File]::AppendText('%LOG_FILE%'); $sw.AutoFlush=$true; try { $input | ForEach-Object { Write-Output $_; $sw.WriteLine($_) } } finally { $sw.Close() }""
+rem лог сервера пишет сам движок, консоль идёт прямо в окно (пайп в powershell гасил окно)
 
 echo.
 echo  ============================================================
@@ -99,6 +106,7 @@ echo.
 
 rem --------------------- [1/7] место на диске -------------------
 echo [1/7] Проверяю место на диске...
+>>"%TRACE%" 2>nul echo [1/7] 1 шаг %DATE% %TIME%
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 if not exist "%STEAMCMD_DIR%" mkdir "%STEAMCMD_DIR%"
 if not exist "%GAME_DIR%" mkdir "%GAME_DIR%"
@@ -150,6 +158,7 @@ exit /b 1
 
 rem --------------------- [2/7] SteamCMD -------------------------
 echo [2/7] Проверяю SteamCMD...
+>>"%TRACE%" 2>nul echo [2/7] 2 шаг %DATE% %TIME%
 if not exist "%STEAMCMD_EXE%" (
     echo        качаю SteamCMD...
     powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '%STEAMCMD_URL%' -OutFile '%STEAMCMD_DIR%\steamcmd.zip'; Expand-Archive -Force -Path '%STEAMCMD_DIR%\steamcmd.zip' -DestinationPath '%STEAMCMD_DIR%'; Remove-Item '%STEAMCMD_DIR%\steamcmd.zip'"
@@ -163,6 +172,7 @@ echo        готово
 
 rem --------------------- [3/7] игра CS2 -------------------------
 echo [3/7] Проверяю игру CS2...
+>>"%TRACE%" 2>nul echo [3/7] 3 шаг %DATE% %TIME%
 set "ATTEMPT=0"
 :game_loop
 if exist "%CS2_EXE%" goto game_ok
@@ -181,6 +191,7 @@ echo        игра на месте
 
 rem --------------------- [4/7] Metamod + CSSharp ----------------
 echo [4/7] Проверяю Metamod и CounterStrikeSharp...
+>>"%TRACE%" 2>nul echo [4/7] 4 шаг %DATE% %TIME%
 set "NEED_PLUGINS=0"
 set "GI_OK=0"
 set "CSS_OK=0"
@@ -252,6 +263,7 @@ if exist "%SCRIPT_DIR%cfg\gamemode_competitive_server.cfg" (
 
 rem --------------------- [5/7] плагин PanelSkins ----------------
 echo [5/7] Проверяю плагин PanelSkins...
+>>"%TRACE%" 2>nul echo [5/7] 5 шаг %DATE% %TIME%
 if not exist "%PLUGIN_DST%" mkdir "%PLUGIN_DST%"
 if not exist "%GAMEDATA_DST%" mkdir "%GAMEDATA_DST%"
 
@@ -275,6 +287,7 @@ if not exist "%PLUGIN_DST%\PanelSkins.json" (
 
 rem --------------------- [6/7] server.cfg -----------------------
 echo [6/7] Готовлю server.cfg...
+>>"%TRACE%" 2>nul echo [6/7] 6 шаг %DATE% %TIME%
 if not exist "%CFG_DIR%" mkdir "%CFG_DIR%"
 copy /y "%SCRIPT_DIR%cfg\server.cfg" "%CFG_DIR%\server.cfg" >nul
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; $t=[IO.File]::ReadAllText($f) -replace 'changeme_rcon_password','%RCON_PASSWORD%'; [IO.File]::WriteAllText($f,$t,(New-Object System.Text.UTF8Encoding($false)))"
@@ -300,6 +313,7 @@ rem запомним путь, чтобы двойной клик в следу�
 
 rem --------------------- [7/7] запуск ---------------------------
 echo [7/7] Запускаю сервер...
+>>"%TRACE%" 2>nul echo [7/7] 7 шаг %DATE% %TIME%
 
 rem Проверим, жива ли панель: без неё плагин не получит скины
 set "PANEL_DIR=%SCRIPT_DIR%..\panel"
@@ -352,7 +366,7 @@ echo   Карта: %MAP%   Порт: %PORT%   Игроков: %MAXPLAYERS%
 echo   Проверка плагинов в консоли:  meta list   и   css_plugins list
 echo   Если плагинов нет — установите Visual C++ Redistributable x64:
 echo       https://aka.ms/vs/17/release/vc_redist.x64.exe
-echo   Лог сервера : %LOG_FILE%
+echo   Лог запуска  : %TRACE%
 echo   Чтобы остановить — закройте окно или наберите quit
 echo  ============================================================
 echo.
@@ -362,9 +376,10 @@ set "RESTARTS=0"
 
 :launch
 if exist "%CODE_FILE%" del /q "%CODE_FILE%" >nul 2>&1
-( "%CS2_EXE%" %ARGS% 2>&1 & (echo EXITCODE:!ERRORLEVEL!)>"%CODE_FILE%" ) | %TEE%
-set "CODE=0"
-if exist "%CODE_FILE%" for /f "usebackq tokens=2 delims=:" %%C in ("%CODE_FILE%") do set "CODE=%%C"
+"%CS2_EXE%" %ARGS%
+set "CODE=%ERRORLEVEL%"
+(echo EXITCODE:%CODE%)>"%CODE_FILE%"
+>>"%TRACE%" 2>nul echo [7/7] сервер остановлен, код %CODE% %DATE% %TIME%
 if "%CODE%"=="0" goto finished
 if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
     set /a RESTARTS+=1
@@ -377,11 +392,14 @@ if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
 :finished
 echo.
 echo   ---- последние 25 строк лога ----
-powershell -NoProfile -Command "Get-Content -LiteralPath '%LOG_FILE%' -Tail 25 -ErrorAction SilentlyContinue"
+powershell -NoProfile -Command "Get-Content -LiteralPath '%TRACE%' -Tail 25 -ErrorAction SilentlyContinue"
 echo   --------------------------------
 echo.
-echo   Полный лог: %LOG_FILE%
+echo   Полный лог запуска: %TRACE%
 echo   Логи движка: %CSGO_DIR%\logs
+echo.
+echo   Окно остаётся открытым специально: если что-то пошло не так,
+echo   текст ошибки будет здесь. Закрыть окно — крестиком.
 pause
 endlocal
 exit /b 0

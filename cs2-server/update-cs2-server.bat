@@ -1,4 +1,6 @@
 @echo off
+rem окно не закроется само: весь запуск идёт внутри cmd /k
+if not defined CS2BAT_GUARD (echo [%~nx0] start... & set "CS2BAT_GUARD=1" & "%COMSPEC%" /k ""%~f0" %*" & pause & exit /b)
 rem =============================================================
 rem  Обновление уже установленного сервера CS2 (Windows)
 rem  Usage: update-cs2-server.bat [install_dir]
