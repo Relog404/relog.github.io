@@ -6,18 +6,31 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PanelSkins</AssemblyName>
     <RootNamespace>PanelSkins</RootNamespace>
-    <!-- Собирать внутри контейнера сервера не надо: билдим на своей машине,
-         а в игры кладём уже готовую DLL. -->
+    <!-- Плагин собирается ТОЛЬКО отдельно от сервера: внутри игрового каталога
+         запускать dotnet не нужно и нельзя. Готовую DLL кладём в
+         addons/counterstrikesharp/plugins/PanelSkins/ -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Версия CounterStrikeSharp, если собираем из NuGet (без локальных DLL) -->
+    <CssVersion Condition="'$(CssVersion)' == ''">1.0.378</CssVersion>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- Укажите путь к своей установке CounterStrikeSharp.
-         Обычно: <сервер>/game/csgo/addons/counterstrikesharp/shared/CounterStrikeSharp.API.dll -->
+  <!-- Способ 1 (основной): указан путь к установленному CounterStrikeSharp.
+       -p:CSSharpRefs="C:\cs2-server\game\csgo\addons\counterstrikesharp\shared\" -->
+  <PropertyGroup Condition="'$(CSSharpRefs)' != ''">
+    <CssRefsDir>$([MSBuild]::EnsureTrailingSlash('$(CSSharpRefs)'))</CssRefsDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(CssRefsDir)' != ''">
     <Reference Include="CounterStrikeSharp.API">
-      <HintPath>$(CSSharpRefs)CounterStrikeSharp.API.dll</HintPath>
+      <HintPath>$(CssRefsDir)CounterStrikeSharp.API.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <!-- Способ 2 (для CI и для тех, у кого нет сервера под рукой):
+       API берётся из NuGet — так и собирает GitHub Actions. -->
+  <ItemGroup Condition="'$(CssRefsDir)' == ''">
+    <PackageReference Include="CounterStrikeSharp.API" Version="$(CssVersion)" />
   </ItemGroup>
 
 </Project>
