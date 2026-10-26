@@ -17,6 +17,10 @@ const state = {
   equip: null,
   multiplier: null,
   chances: null,
+  site: null,
+  currency: null,
+  rates: {},
+  targetCache: {},
 };
 
 const CELL_W = 132;
@@ -61,7 +65,43 @@ function toast(message, kind = '') {
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const coins = (value) => `${Number(value).toLocaleString('ru-RU')} 🪙`;
+/** Цены показываются в выбранной валюте: монеты / рубли / доллары.
+ *  Деньги виртуальные, курс нужен только для отображения. */
+/** Курсы и выбранная валюта. Выбор игрока хранится в браузере,
+ *  значение по умолчанию приходит с сервера (настройки админа). */
+function currencyState() {
+  const site = state.site || { currency: 'coins', rates: { rub: 1, usd: 0.011 } };
+  return {
+    currency: state.currency || site.currency || 'coins',
+    rates: { ...(site.rates || { rub: 1, usd: 0.011 }), ...(state.rates || {}) },
+  };
+}
+
+function money(value) {
+  const amount = Number(value) || 0;
+  const { currency, rates } = currencyState();
+  if (currency === 'rub') {
+    return `${(amount * (rates.rub || 1)).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽`;
+  }
+  if (currency === 'usd') {
+    return `$${(amount * (rates.usd || 0.011)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `${amount.toLocaleString('ru-RU')} 🪙`;
+}
+
+function renderCurrencyPicker() {
+  const picker = $('#currencyPicker');
+  if (!picker) return;
+  picker.value = currencyState().currency;
+  picker.onchange = async () => {
+    state.currency = picker.value;
+    try { localStorage.setItem('cs2panel.currency', picker.value); } catch { /* приватный режим */ }
+    renderWallet();
+    for (const render of [loadCatalog, loadTargets, loadChances, loadEquip, renderVault]) {
+      try { await render(); } catch (error) { toast(error.message, 'err'); }
+    }
+  };
+}
 
 const CATEGORY_ICON = {
   'Ножи': '🔪', 'Перчатки': '🧤', 'Винтовки': '🔫', 'Пистолеты': '🔫',
@@ -78,9 +118,9 @@ function itemArt(item, icon) {
 function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {}) {
   const icon = CATEGORY_ICON[item.category] || '🎁';
   const footer = {
-    shop: `<span class="price">${coins(item.price)}</span><button class="btn btn-sm btn-buy" data-buy="${escapeHtml(item.id)}">купить</button>`,
-    target: `<span class="price">${coins(item.price)}</span><button class="btn btn-sm" data-target="${escapeHtml(item.id)}">цель</button>`,
-    vault: `<span class="price">${coins(item.price)}</span><button class="btn btn-sm btn-ghost" data-sell="${escapeHtml(item.uid)}">продать</button>`,
+    shop: `<span class="price">${money(item.price)}</span><button class="btn btn-sm btn-buy" data-buy="${escapeHtml(item.id)}">купить</button>`,
+    target: `<span class="price">${money(item.price)}</span><button class="btn btn-sm" data-target="${escapeHtml(item.id)}">цель</button>`,
+    vault: `<span class="price">${money(item.price)}</span><button class="btn btn-sm btn-ghost" data-sell="${escapeHtml(item.uid)}">продать</button>`,
   }[mode];
 
   return `<div class="skin ${selected ? 'selected' : ''} ${inDraft ? 'in-draft' : ''}" data-rarity="${escapeHtml(item.rarity)}" data-id="${escapeHtml(item.id)}">
@@ -129,6 +169,21 @@ function renderAuth() {
 }
 
 /* -------------------------------- config -------------------------------- */
+
+async function loadSite() {
+  try {
+    state.site = state.config?.currency && state.config.currency.currency
+      ? state.config.currency
+      : (await api('/api/settings'));
+  } catch {
+    state.site = { currency: 'coins', rates: { rub: 1, usd: 0.011 } };
+  }
+  if (!state.currency) {
+    try { state.currency = localStorage.getItem('cs2panel.currency'); } catch { /* нет доступа */ }
+  }
+  renderCurrencyPicker();
+  renderCurrencyEditor();
+}
 
 async function loadConfig() {
   state.config = await api('/api/config');
@@ -181,7 +236,10 @@ function renderWallet() {
   const wallet = $('#wallet');
   wallet.hidden = !state.user;
   if (!state.user) return;
-  $('#coinBalance').textContent = Number(state.econ?.coins ?? 0).toLocaleString('ru-RU');
+  const glyph = { rub: '₽', usd: '$', coins: '🪙' }[currencyState().currency] || '🪙';
+  const coinEl = document.querySelector('#wallet .coin');
+  if (coinEl) coinEl.textContent = glyph;
+  $('#coinBalance').textContent = money(state.econ?.coins ?? 0);
   const daily = state.econ?.daily;
   const btn = $('#dailyBtn');
   btn.disabled = !daily?.available;
@@ -205,12 +263,12 @@ function renderVault() {
   const items = state.econ.items || [];
   const value = items.reduce((sum, i) => sum + i.price, 0);
   cards.innerHTML = [
-    ['Баланс', coins(state.econ.coins)],
+    ['Баланс', money(state.econ.coins)],
     ['Предметов', items.length],
-    ['Стоимость хранилища', coins(value)],
+    ['Стоимость хранилища', money(value)],
     ['Розыгрышей', state.econ.stats?.upgrades ?? 0],
     ['Побед', state.econ.stats?.wins ?? 0],
-    ['Лучший выигрыш', coins(state.econ.stats?.bestWin ?? 0)],
+    ['Лучший выигрыш', money(state.econ.stats?.bestWin ?? 0)],
   ]
     .map(([label, value2]) => `<div class="card"><div class="label">${escapeHtml(label)}</div><div class="value">${value2}</div></div>`)
     .join('');
@@ -229,7 +287,7 @@ function renderVault() {
       event.stopPropagation();
       try {
         const data = await api('/api/economy/sell', { method: 'POST', body: JSON.stringify({ uid: btn.dataset.sell }) });
-        toast(`Продано за ${coins(data.refund)}`, 'ok');
+        toast(`Продано за ${money(data.refund)}`, 'ok');
         await loadEconomy();
       } catch (error) {
         toast(error.message, 'err');
@@ -301,7 +359,7 @@ async function loadCatalog() {
       if (!state.user) return toast('Войдите через Steam, чтобы покупать', 'err');
       try {
         const data = await api('/api/economy/buy', { method: 'POST', body: JSON.stringify({ itemId: btn.dataset.buy }) });
-        toast(`Куплено: ${data.item.pattern} за ${coins(data.item.price)}`, 'ok');
+        toast(`Куплено: ${data.item.pattern} за ${money(data.item.price)}`, 'ok');
         await loadEconomy();
       } catch (error) {
         toast(error.message, 'err');
@@ -343,7 +401,7 @@ function renderUpgradePicker() {
   }
   state.selection = state.selection.filter((uid) => items.some((i) => i.uid === uid));
   const stake = items.filter((i) => state.selection.includes(i.uid)).reduce((sum, i) => sum + i.price, 0);
-  $('#stakeLabel').textContent = `выбрано ${state.selection.length} на ${coins(stake)}`;
+  $('#stakeLabel').textContent = `выбрано ${state.selection.length} на ${money(stake)}`;
 
   box.innerHTML = items
     .slice()
@@ -354,7 +412,7 @@ function renderUpgradePicker() {
         <input type="checkbox" data-pick="${escapeHtml(entry.uid)}" ${checked} />
         <span class="pick-icon">${CATEGORY_ICON[entry.item.category] || '🎁'}</span>
         <span class="pick-name">${escapeHtml(entry.item.weapon)} — ${escapeHtml(entry.item.pattern)}</span>
-        <span class="price">${coins(entry.price)}</span>
+        <span class="price">${money(entry.price)}</span>
       </label>`;
     })
     .join('');
@@ -404,7 +462,7 @@ async function updateChance() {
   const rough = stake ? Math.min(95, Math.max(1, Math.round((stake / targetPrice) * 100 * (state.config?.economy?.edge ?? 0.95)))) : 0;
 
   if (!state.selection.length) {
-    summary.innerHTML = `<span class="muted">Цель: <b>${escapeHtml(state.target.pattern)}</b> · ${coins(targetPrice)} · поставьте предметы слева</span>`;
+    summary.innerHTML = `<span class="muted">Цель: <b>${escapeHtml(state.target.pattern)}</b> · ${money(targetPrice)} · поставьте предметы слева</span>`;
     fill.style.width = '0%';
     $('#chanceText').textContent = '0%';
     spin.disabled = true;
@@ -422,7 +480,7 @@ async function updateChance() {
     $('#chanceText').textContent = `${percent.toFixed(percent < 10 ? 2 : 1)}%`;
     const lossNote = data.stake > data.payout ? ' <span class="warn">ставка дороже цели</span>' : '';
     const multNote = data.multiplier && data.multiplier >= 2 ? ` <span class="badge">×${Number(data.multiplier.toFixed(1))}</span>` : '';
-    summary.innerHTML = `Ставка <b>${coins(data.stake)}</b> → цель <b>${escapeHtml(data.target.pattern)}</b> (${coins(data.payout)})${multNote}${lossNote}`;
+    summary.innerHTML = `Ставка <b>${money(data.stake)}</b> → цель <b>${escapeHtml(data.target.pattern)}</b> (${money(data.payout)})${multNote}${lossNote}`;
     spin.disabled = state.spinning || data.stake <= 0;
   } catch (error) {
     state.chance = rough / 100;
@@ -440,7 +498,7 @@ function buildReel(cells, winIndex, loops = 3) {
     .map((cell) => `<div class="reel-cell ${cell.isWin ? 'win' : ''}" data-rarity="${escapeHtml(cell.rarity)}">
         <div class="reel-art">${itemArt(cell, CATEGORY_ICON[cell.category] || '🎁')}</div>
         <div class="reel-name">${escapeHtml(cell.pattern)}</div>
-        <div class="reel-price">${coins(cell.price)}</div>
+        <div class="reel-price">${money(cell.price)}</div>
       </div>`)
     .join('');
 
@@ -477,8 +535,8 @@ async function spin() {
         <div class="result-title">${data.win ? '🎉 Апгрейд прошёл!' : '😢 Не повезло'}</div>
         <div class="result-body">
           Цель: <b>${escapeHtml(data.target.pattern)}</b> · шанс ${(data.chance * 100).toFixed(2)}% ·
-          ставка ${coins(data.stake)} · roll ${data.roll.toFixed(6)}
-          ${data.win ? `→ выигрыш ${coins(data.payout)}` : `→ ставка ${coins(data.stake)} сгорела`}
+          ставка ${money(data.stake)} · roll ${data.roll.toFixed(6)}
+          ${data.win ? `→ выигрыш ${money(data.payout)}` : `→ ставка ${money(data.stake)} сгорела`}
         </div>
         <button class="btn btn-sm" id="againBtn">ещё раз</button>`;
       $('#againBtn').onclick = () => { $('#resultBox').hidden = true; };
@@ -514,7 +572,7 @@ async function loadHistory() {
               <span class="mono">${new Date(h.at).toLocaleTimeString('ru-RU')}</span>
               <span class="hist-name">${h.target.image ? `<img class="hist-img" src="${escapeHtml(h.target.image)}" alt="" loading="lazy">` : CATEGORY_ICON[h.target.category] || '🎁'} ${escapeHtml(h.target.pattern)}</span>
               <span class="muted">${(h.chance * 100).toFixed(1)}%</span>
-              <span>${coins(h.stake)} → ${h.win ? coins(h.payout) : '0'}</span>
+              <span>${money(h.stake)} → ${h.win ? money(h.payout) : '0'}</span>
               <span class="hist-badge">${h.win ? 'WIN' : 'LOSE'}</span>
             </div>`)
           .join('')
@@ -586,6 +644,8 @@ function renderMultipliers() {
 
 /** Рисует список предметов в сетке цели (общий код для поиска и подбора). */
 function renderItems(list, { mode = 'target' } = {}) {
+  state.targetCache = {};
+  for (const item of list) state.targetCache[item.id] = item;
   $('#targetGrid').innerHTML = list.length
     ? list.map((item) => itemCard(item, { mode, selected: state.target?.id === item.id })).join('')
     : '<p class="empty">Ничего не найдено</p>';
@@ -596,12 +656,17 @@ function bindTargetButtons() {
   $$('#targetGrid [data-target]').forEach((btn) => {
     btn.onclick = async (event) => {
       event.stopPropagation();
-      const { items } = await api(`/api/catalog?query=${encodeURIComponent(btn.dataset.target)}&pageSize=1`);
-      const found = items.find((i) => i.id === btn.dataset.target);
-      if (!found) return toast('Предмет не найден', 'err');
-      state.target = found;
-      loadTargets();
-      updateChance();
+      const id = btn.dataset.target;
+      try {
+        // предметы, которые уже отрисованы, берём из кэша — это и есть прошлый баг:
+        // раньше цель искалась поисковым запросом по id, а поиск по id не ищет.
+        const found = state.targetCache[id] || (await api(`/api/catalog/${encodeURIComponent(id)}`)).item;
+        state.target = found;
+        updateChance();
+        loadTargets();
+      } catch (error) {
+        toast(error.message || 'Предмет не найден', 'err');
+      }
     };
   });
 }
@@ -633,7 +698,7 @@ function renderEquip() {
       const active = slot.equipped;
       const item = active?.item;
       const options = slot.options
-        .map((o) => `<option value="${escapeHtml(o.uid)}"${active?.uid === o.uid ? ' selected' : ''}>${escapeHtml(o.item.pattern)} · ${o.item.price} 🪙</option>`)
+        .map((o) => `<option value="${escapeHtml(o.uid)}"${active?.uid === o.uid ? ' selected' : ''}>${escapeHtml(o.item.pattern)} · ${money(o.item.price)}</option>`)
         .join('');
       const [min, max] = item?.float || [0, 1];
       return `<div class="equip-card" data-slot-card="${escapeHtml(slot.key)}">
@@ -926,13 +991,13 @@ async function loadAdmin() {
     const stats = await api('/api/admin/stats');
     $('#adminCards').innerHTML = [
       ['Игроков', stats.users],
-      ['Монет в обороте', coins(stats.coinsInCirculation)],
+      ['Монет в обороте', money(stats.coinsInCirculation)],
       ['Предметов в хранилищах', stats.itemsInVaults],
       ['Розыгрышей', stats.upgrades],
       ['Побед', stats.wins],
       ['RTP (выплачено / ставки)', `${Math.round((stats.rtp || 0) * 100)}%`],
-      ['Ставок всего', coins(stats.wagered)],
-      ['Выплачено', coins(stats.paid)],
+      ['Ставок всего', money(stats.wagered)],
+      ['Выплачено', money(stats.paid)],
     ]
       .map(([label, value]) => `<div class="card"><div class="label">${escapeHtml(label)}</div><div class="value">${value}</div></div>`)
       .join('');
@@ -1026,7 +1091,7 @@ async function loadAdmin() {
           <td class="mono">${new Date(h.at).toLocaleString('ru-RU')}</td>
           <td class="mono">${escapeHtml(h.steamId.slice(-6))}</td>
           <td>${escapeHtml(h.target.pattern)}</td>
-          <td>${coins(h.stake)}</td>
+          <td>${money(h.stake)}</td>
           <td>${(h.chance * 100).toFixed(1)}%</td>
           <td><span class="hist-badge ${h.win ? 'win' : 'lose'}">${h.win ? 'WIN' : 'LOSE'}</span></td>
         </tr>`)
@@ -1034,6 +1099,52 @@ async function loadAdmin() {
   } catch {
     $('#adminHistory tbody').innerHTML = '';
   }
+}
+
+/* ------------------------- валюта и шансы (админ) ----------------------- */
+
+function renderCurrencyEditor() {
+  const box = $('#currencySettings');
+  if (!box || !state.site) return;
+  const { currency, rates } = state.site;
+  box.innerHTML = `
+    <label class="row-label">Валюта цен
+      <select id="currencySelect">
+        <option value="coins"${currency === 'coins' ? ' selected' : ''}>Монеты 🪙</option>
+        <option value="rub"${currency === 'rub' ? ' selected' : ''}>Рубли ₽</option>
+        <option value="usd"${currency === 'usd' ? ' selected' : ''}>Доллары $</option>
+      </select>
+    </label>
+    <label class="row-label">Курс: 1 монета =
+      <input type="number" step="0.01" min="0.0001" id="rateRub" value="${rates.rub}" style="width:90px"> ₽
+    </label>
+    <label class="row-label">
+      <input type="number" step="0.001" min="0.0001" id="rateUsd" value="${rates.usd}" style="width:90px"> $
+    </label>
+    <button class="btn" id="saveCurrency">Сохранить валюту</button>`;
+
+  $('#saveCurrency').onclick = async () => {
+    try {
+      const data = await api('/api/admin/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          currency: $('#currencySelect').value,
+          rates: { rub: Number($('#rateRub').value), usd: Number($('#rateUsd').value) },
+        }),
+      });
+      state.site = data;
+      state.currency = data.currency;
+      renderCurrencyPicker();
+      renderCurrencyEditor();
+      renderWallet();
+      loadCatalog();
+      loadEquip();
+      renderVault();
+      toast(`Цены теперь в валюте: ${data.currency}`, 'ok');
+    } catch (error) {
+      toast(error.message, 'err');
+    }
+  };
 }
 
 /* ------------------------- редактор шансов (админ) ---------------------- */
@@ -1105,7 +1216,7 @@ function bindUi() {
   $('#dailyBtn').onclick = async () => {
     try {
       const data = await api('/api/economy/daily', { method: 'POST' });
-      toast(`Бонус начислен: ${coins(state.econ ? data.coins - state.econ.coins : data.coins)}`, 'ok');
+      toast(`Бонус начислен: ${money(state.econ ? data.coins - state.econ.coins : data.coins)}`, 'ok');
       await loadEconomy();
     } catch (error) {
       toast(error.message, 'err');
@@ -1170,6 +1281,7 @@ function bindUi() {
 
   const saveChancesBtn = $('#saveChances');
   if (saveChancesBtn) saveChancesBtn.onclick = saveChances;
+  renderCurrencyEditor();
 
   $('#saveLoadout').onclick = async () => {
     if (!state.user) return toast('Сначала войдите через Steam', 'err');
@@ -1243,6 +1355,8 @@ function bindUi() {
     await loadCategories();
     await loadWeapons();
     await loadCatalog();
+    await loadSite();
+    renderCurrencyPicker();
     await loadEconomy();
     await loadEquip();
     await loadChances();

@@ -47,6 +47,14 @@ export const config = {
   adminSteamIds: list(env.ADMIN_STEAM_IDS),
   /** Разрешать ли менять список серверов из панели (иначе только сервер из env). */
   allowServerManagement: bool(env.ALLOW_SERVER_MANAGEMENT, true),
+  /** Как показывать цены: coins | rub | usd (только отображение, деньги виртуальные). */
+  currency: ['coins', 'rub', 'usd'].includes(String(env.CURRENCY || 'coins').toLowerCase())
+    ? String(env.CURRENCY).toLowerCase()
+    : 'coins',
+  /** Курс отображения: сколько рублей/долларов в одной виртуальной монете. */
+  rateRub: Math.min(Math.max(Number(env.RATE_RUB || 1), 0.0001), 1_000_000),
+  rateUsd: Math.min(Math.max(Number(env.RATE_USD || 0.011), 0.0001), 1_000_000),
+
   /** Базовый коэффициент апгрейда по умолчанию (шанс = ставка / цена цели * edge). */
   upgradeEdge: Math.min(Math.max(Number(env.UPGRADE_EDGE || 0.95), 0.1), 1),
 

@@ -27,6 +27,11 @@
         <span>Сервер</span>
         <select id="serverSelect"></select>
       </label>
+      <select id="currencyPicker" class="currency-picker" title="Валюта цен">
+        <option value="coins">🪙 Монеты</option>
+        <option value="rub">₽ Рубли</option>
+        <option value="usd">$ Доллары</option>
+      </select>
       <div id="authBox" class="auth-box"></div>
     </div>
   </header>
@@ -329,6 +334,15 @@
           <h2>Правки каталога</h2>
           <div class="loadouts" id="adminItems"></div>
         </div>
+      </div>
+
+      <div class="block">
+        <h2>Валюта сайта</h2>
+        <p class="muted small">
+          Монеты виртуальные, но показывать цены можно в рублях или долларах — это только отображение.
+          Курс: сколько рублей/долларов в одной монете.
+        </p>
+        <div class="row" id="currencySettings"></div>
       </div>
 
       <div class="block">

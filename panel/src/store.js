@@ -374,3 +374,47 @@ export function patchUpgradeSettings(patch) {
   save();
   return next;
 }
+
+
+/* --------------------- отображение цен (валюта сайта) ------------------- */
+
+/**
+ * Монеты виртуальные, но показывать их можно в любой валюте — это только
+ * отображение: rates говорит, сколько «монета» стоит в рублях и долларах.
+ */
+export function defaultSiteSettings() {
+  return {
+    currency: config.currency,           // coins | rub | usd
+    rates: { rub: config.rateRub, usd: config.rateUsd },
+  };
+}
+
+export function getSiteSettings() {
+  const store = load();
+  if (!store.settings) store.settings = {};
+  if (!store.settings.site) {
+    store.settings.site = defaultSiteSettings();
+    save();
+  }
+  const site = store.settings.site;
+  return {
+    currency: ['coins', 'rub', 'usd'].includes(site.currency) ? site.currency : 'coins',
+    rates: { ...defaultSiteSettings().rates, ...(site.rates || {}) },
+  };
+}
+
+export function patchSiteSettings(patch) {
+  const store = load();
+  store.settings = store.settings || {};
+  const next = getSiteSettings();
+  if (patch.currency && ['coins', 'rub', 'usd'].includes(String(patch.currency))) next.currency = String(patch.currency);
+  if (patch.rates && typeof patch.rates === 'object') {
+    for (const key of ['rub', 'usd']) {
+      const value = Number(patch.rates[key]);
+      if (Number.isFinite(value) && value > 0 && value < 1_000_000) next.rates[key] = value;
+    }
+  }
+  store.settings.site = next;
+  save();
+  return next;
+}

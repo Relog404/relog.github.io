@@ -60,6 +60,7 @@ export function createApp() {
       allowServerManagement: config.allowServerManagement,
       baseUrl: config.baseUrl,
       economy: economy.settings(),
+      currency: economy.siteSettings(),
       // Игровой сервер не обязателен: сайт, магазин и апгрейд работают без него.
       serverBound: store.listServers().some((s) => !s.demo && s.hasPassword),
     });
@@ -262,6 +263,18 @@ export function createApp() {
   app.get('/api/skins/weapons', (_req, res) => res.json({ weapons: items.weaponsIndex() }));
   app.get('/api/catalog/categories', (_req, res) => res.json({ categories: items.categoryIndex() }));
 
+  /** Один предмет по id — этим пользуется выбор цели в апгрейде. */
+  app.get('/api/catalog/:id', (req, res) => {
+    const item = items.findItem(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Предмет не найден в каталоге' });
+    res.json({ item });
+  });
+
+  /** Публичные настройки сайта (валюта и курсы отображения). */
+  app.get('/api/settings', (_req, res) => {
+    res.json(economy.siteSettings());
+  });
+
   /* ------------------------------- сборки ------------------------------- */
 
   app.get('/api/loadout', requireAuth, (req, res) => {
@@ -431,6 +444,10 @@ export function createApp() {
 
   app.get('/api/admin/history', requireAdmin, (_req, res) => {
     res.json({ history: store.getHistory(50) });
+  });
+
+  app.patch('/api/admin/settings', requireAdmin, (req, res) => {
+    res.json(store.patchSiteSettings(req.body || {}));
   });
 
   app.patch('/api/admin/upgrade/settings', requireAdmin, (req, res) => {

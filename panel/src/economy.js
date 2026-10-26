@@ -77,6 +77,11 @@ export function settings() {
   };
 }
 
+/** Настройки отображения цен: валюта и курсы. */
+export function siteSettings() {
+  return store.getSiteSettings();
+}
+
 /** Подбор целей под множитель: цена цели ≈ ставка × multiplier. */
 export function suggestTargets(stake, multiplier, limit = 12) {
   const target = Math.max(1, Number(stake) || 0) * Math.max(1, Number(multiplier) || 2);
