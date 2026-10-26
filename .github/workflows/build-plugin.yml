@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       css_version:
-        description: 'Версия CounterStrikeSharp (пусто = последняя)'
+        description: 'Версия CounterStrikeSharp из NuGet (пусто = из csproj)'
         required: false
         default: ''
       commit_dll:
@@ -41,22 +41,49 @@ jobs:
 
       - name: Собрать плагин
         id: build
+        continue-on-error: true
         run: |
           set -uo pipefail
           cd cs2-server/plugins/PanelSkins
           rm -f build.log
-          dotnet build -c Release 2>&1 | tee -a build.log
+          args=""
+          [ -n "${{ inputs.css_version }}" ] && args="-p:CssVersion=${{ inputs.css_version }}"
+          dotnet build -c Release $args 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
+
+      - name: Показать лог сборки
+        if: steps.build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          log=$(find . -name build.log | head -1)
+          {
+            echo "### Лог сборки PanelSkins (ветка ${GITHUB_REF_NAME})"
+            echo '```'
+            echo "--- начало ---"
+            head -c 12000 "$log"
+            echo ""
+            echo "--- конец ---"
+            tail -c 25000 "$log"
+            echo '```'
+          } > /tmp/report.md
+          gh pr comment 1 --repo "${{ github.repository }}" --body-file /tmp/report.md || true
+
+      - name: Проверить, что DLL собралась
+        if: always()
+        run: |
+          set -euo pipefail
+          test -f cs2-server/plugins/PanelSkins/bin/Release/net10.0/PanelSkins.dll
 
       - name: Сложить готовые файлы
         run: |
           set -euo pipefail
           out=cs2-server/plugins/PanelSkins/dist
+          bin=cs2-server/plugins/PanelSkins/bin/Release/net10.0
           mkdir -p "$out"
-          bin=$(find cs2-server/plugins/PanelSkins/bin/Release -name 'PanelSkins.dll' | head -1)
-          echo "собралось: $bin"
-          cp "$bin" "$out/"
-          cp "$(dirname "$bin")/PanelSkins.deps.json" "$out/" 2>/dev/null || true
+          cp "$bin/PanelSkins.dll" "$out/"
+          cp "$bin/PanelSkins.deps.json" "$out/" 2>/dev/null || true
           cp cs2-server/plugins/PanelSkins/config.example.json "$out/PanelSkins.json.example"
           cp cs2-server/plugins/PanelSkins/gamedata/panelskins.json "$out/"
           ls -l "$out"
