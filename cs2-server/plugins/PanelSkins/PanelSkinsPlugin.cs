@@ -372,6 +372,36 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
         _cache.Remove(steamId);
         _ = RefreshLoadoutAsync(steamId).ContinueWith(_ =>
-            player.PrintToChat(" Скины обновлены с сайта."));
+        {
+            player.PrintToChat(" Скины обновлены с сайта.");
+
+            // перекрашиваем то, что уже в руках: иначе новый скин появится только
+            // когда оружие создастся заново — на респауне или при покупке
+            Server.NextFrame(() =>
+            {
+                try
+                {
+                    var pawn = player.PlayerPawn?.Value;
+                    if (pawn is null || !pawn.IsValid) return;
+
+                    var weapons = pawn.WeaponServices?.MyWeapons;
+                    if (weapons is not null)
+                    {
+                        for (var i = 0; i < weapons.Count; i++)
+                        {
+                            var held = weapons[i].Value;
+                            if (held is not null && held.IsValid) TryApplyWeaponSkin(held);
+                        }
+                    }
+
+                    if (Config.ApplyGloves && GetLoadout(steamId)?.Gloves is { } gloves)
+                        SkinApplier.ApplyGloves(pawn, gloves);
+                }
+                catch (Exception ex)
+                {
+                    Log($"не удалось перекрасить оружие в руках: {ex.Message}");
+                }
+            });
+        });
     }
 }
