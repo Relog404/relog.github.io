@@ -31,17 +31,37 @@ New-Item -ItemType Directory -Path $Tmp -Force | Out-Null
 function Get-File {
     param([string]$Url, [string]$OutFile)
     for ($i = 1; $i -le 3; $i++) {
+        Write-Host "   попытка $i/3"
+        $ok = $false
         try {
-            Write-Host "   попытка $i/3"
             Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
-            $size = (Get-Item $OutFile).Length
+            $ok = $true
+        } catch {
+            Write-Host "     Invoke-WebRequest: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+        if (-not $ok) {
+            try {
+                (New-Object System.Net.WebClient).DownloadFile($Url, $OutFile)
+                $ok = $true
+            } catch {
+                Write-Host "     WebClient: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+        if (-not $ok) {
+            try {
+                & curl.exe -L -s -S -o $OutFile $Url
+                if ($LASTEXITCODE -eq 0) { $ok = $true } else { Write-Host "     curl.exe код $LASTEXITCODE" -ForegroundColor Yellow }
+            } catch {
+                Write-Host "     curl.exe: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+        if ($ok) {
+            $size = (Get-Item $OutFile -ErrorAction SilentlyContinue).Length
             if ($size -gt 500KB) {
                 Write-Host ("   скачано " + [math]::Round($size / 1MB, 1) + " МБ")
                 return
             }
             Write-Host "   скачалось слишком мало ($size байт) - повторяю" -ForegroundColor Yellow
-        } catch {
-            Write-Host "   ошибка: $($_.Exception.Message)" -ForegroundColor Yellow
         }
         Start-Sleep -Seconds 3
     }
@@ -249,23 +269,33 @@ Write-Host "that is the normal, officially tolerated mode for community servers 
 
 
 # --------------------------- проверка ---------------------------
-# Metamod для CS2 - это свой server.dll, он перехватывает настоящий через GAMEBIN
-$mmDll  = Join-Path $mmDir  'bin\win64\server.dll'
-$cssDll = Join-Path $cssDir 'bin\win64\counterstrikesharp.dll'
-$cssVdf = Join-Path $mmDir  'counterstrikesharp.vdf'
+# Metamod для CS2 подменяет server.dll через GAMEBIN, поэтому смотрим, что реально лежит
+$addonsDir = Join-Path $CsgoDir 'addons'
+$mmBin     = Join-Path $mmDir  'bin\win64'
+$cssBin    = Join-Path $cssDir 'bin\win64'
+$mmDlls  = @()
+$cssDlls = @()
+if (Test-Path $mmBin)  { $mmDlls  = @(Get-ChildItem -Path $mmBin  -Filter *.dll -ErrorAction SilentlyContinue) }
+if (Test-Path $cssBin) { $cssDlls = @(Get-ChildItem -Path $cssBin -Filter *.dll -ErrorAction SilentlyContinue) }
 
 Write-Host ""
 Write-Host "==== Проверка ====" -ForegroundColor Cyan
-Write-Host ("  metamod bin\win64\server.dll             : " + (Test-Path $mmDll))
-Write-Host ("  css     bin\win64\counterstrikesharp.dll : " + (Test-Path $cssDll))
-Write-Host ("  metamod\counterstrikesharp.vdf           : " + (Test-Path $cssVdf))
+Write-Host "  $addonsDir :"
+Get-ChildItem -Path $addonsDir -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("    " + $_.Name) }
+Write-Host "  addons\metamod\bin\win64 :"
+if ($mmDlls.Count -eq 0) { Write-Host "    ПУСТО" -ForegroundColor Red }
+$mmDlls | ForEach-Object { Write-Host ("    " + $_.Name + " (" + [math]::Round($_.Length / 1KB) + " КБ)") }
+Write-Host "  addons\counterstrikesharp\bin\win64 :"
+if ($cssDlls.Count -eq 0) { Write-Host "    ПУСТО" -ForegroundColor Red }
+$cssDlls | ForEach-Object { Write-Host ("    " + $_.Name + " (" + [math]::Round($_.Length / 1KB) + " КБ)") }
+Write-Host ("  metamod\counterstrikesharp.vdf : " + (Test-Path (Join-Path $mmDir 'counterstrikesharp.vdf')))
 $giHasMm = $false
 if (Test-Path $gameinfo) { $giHasMm = ((Get-Content $gameinfo -Raw) -match 'csgo[\\/]addons[\\/]metamod') }
-Write-Host ("  gameinfo.gi путь к metamod               : " + $giHasMm)
+Write-Host ("  gameinfo.gi путь к metamod     : " + $giHasMm)
 
-if (-not (Test-Path $mmDll)) {
+if ($mmDlls.Count -eq 0) {
     Write-Host ""
-    Write-Host "Metamod не установлен (нет $mmDll) - плагины не загрузятся." -ForegroundColor Red
+    Write-Host "Metamod не установлен - плагины не загрузятся." -ForegroundColor Red
     Write-Host "Инструкции по ручной установке - выше." -ForegroundColor Yellow
     Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
     exit 1
