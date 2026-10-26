@@ -87,10 +87,13 @@ function Install-FromZip {
     Write-Host "   распаковано в $target" -ForegroundColor Green
 }
 
-function Test-HasDll {
+# установленным считаем только если в bin\win64 лежит сам рантайм,
+# а не любой dll внутри папки (например plugins\PanelSkins)
+function Test-Runtime {
     param([string]$Dir)
-    if (-not (Test-Path $Dir)) { return $false }
-    $n = (Get-ChildItem -Path $Dir -Recurse -Filter *.dll -ErrorAction SilentlyContinue | Measure-Object).Count
+    $bin = Join-Path $Dir 'bin\win64'
+    if (-not (Test-Path $bin)) { return $false }
+    $n = (Get-ChildItem -Path $bin -Filter *.dll -ErrorAction SilentlyContinue | Measure-Object).Count
     return ($n -gt 0)
 }
 
@@ -107,7 +110,7 @@ $cssDir = Join-Path $CsgoDir 'addons\counterstrikesharp'
 $fail = $false
 
 # --------------------------- Metamod ----------------------------
-if (Test-HasDll $mmDir) {
+if (Test-Runtime $mmDir) {
     Write-Host ""
     Write-Host "== Metamod ==" -ForegroundColor Cyan
     Write-Host "   уже установлен: $mmDir"
@@ -125,7 +128,7 @@ if (Test-HasDll $mmDir) {
 
 # ---------------------- CounterStrikeSharp ----------------------
 # сборка with-runtime: .NET внутри, ничего ставить руками не надо
-if (Test-HasDll $cssDir) {
+if (Test-Runtime $cssDir) {
     Write-Host ""
     Write-Host "== CounterStrikeSharp ==" -ForegroundColor Cyan
     Write-Host "   уже установлен: $cssDir"
@@ -296,6 +299,13 @@ Write-Host ("  gameinfo.gi путь к metamod     : " + $giHasMm)
 if ($mmDlls.Count -eq 0) {
     Write-Host ""
     Write-Host "Metamod не установлен - плагины не загрузятся." -ForegroundColor Red
+    Write-Host "Инструкции по ручной установке - выше." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
+    exit 1
+}
+if ($cssDlls.Count -eq 0) {
+    Write-Host ""
+    Write-Host "CounterStrikeSharp не установлен - PanelSkins не загрузится." -ForegroundColor Red
     Write-Host "Инструкции по ручной установке - выше." -ForegroundColor Yellow
     Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
     exit 1

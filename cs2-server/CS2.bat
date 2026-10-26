@@ -145,7 +145,9 @@ rem --------------------- [4/7] Metamod + CSSharp ----------------
 echo [4/7] Проверяю Metamod и CounterStrikeSharp...
 set "NEED_PLUGINS=0"
 set "GI_OK=0"
-if not exist "%CSGO_DIR%\addons\counterstrikesharp" set "NEED_PLUGINS=1"
+set "CSS_OK=0"
+if exist "%CSGO_DIR%\addons\counterstrikesharp\bin\win64\*.dll" set "CSS_OK=1"
+if "%CSS_OK%"=="0" set "NEED_PLUGINS=1"
 set "MM_OK=0"
 if exist "%CSGO_DIR%\addons\metamod\bin\win64\*.dll" set "MM_OK=1"
 if "%MM_OK%"=="0" set "NEED_PLUGINS=1"
@@ -174,6 +176,14 @@ if "%MM_OK%"=="1" (
     echo   ============================================================
     echo.
     pause
+)
+set "CSS_OK=0"
+if exist "%CSGO_DIR%\addons\counterstrikesharp\bin\win64\*.dll" set "CSS_OK=1"
+if "%CSS_OK%"=="1" (
+    echo        counterstrikesharp на месте
+) else (
+    echo        ВНИМАНИЕ: нет dll в addons\counterstrikesharp\bin\win64
+    echo        PanelSkins не загрузится
 )
 
 :gi_check
