@@ -115,6 +115,14 @@ function itemArt(item, icon) {
     : `<span class="fallback show">${icon}</span>`;
 }
 
+/** Реальная цена Steam в монетах — чтобы было видно, что ценник не выдуман. */
+function steamTag(item) {
+  if (!item.steamPrice) return '';
+  const rate = state.site?.coinRateRub || 10;
+  const rub = item.steamPrice.rub;
+  return `<span class="steam-tag" title="Цена с торговой площадки Steam">Steam ${money(rub * rate)}</span>`;
+}
+
 function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {}) {
   const icon = CATEGORY_ICON[item.category] || '🎁';
   const footer = {
@@ -123,12 +131,19 @@ function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {
     vault: `<span class="price">${money(item.price)}</span><button class="btn btn-sm btn-ghost" data-sell="${escapeHtml(item.uid)}">продать</button>`,
   }[mode];
 
-  return `<div class="skin ${selected ? 'selected' : ''} ${inDraft ? 'in-draft' : ''}" data-rarity="${escapeHtml(item.rarity)}" data-id="${escapeHtml(item.id)}">
+  return `<div class="skin ${selected ? 'selected' : ''} ${inDraft ? 'in-draft' : ''}"
+       data-rarity="${escapeHtml(item.rarity)}" data-id="${escapeHtml(item.id)}"
+       style="--rar:${RARITY_COLOR[item.rarity] || '#8b98a8'}">
+    <span class="skin-shine"></span>
     <div class="skin-art">${itemArt(item, icon)}</div>
-    <div class="weapon">${escapeHtml(item.weapon)} · ${escapeHtml(item.category)}</div>
+    <div class="weapon">${escapeHtml(item.weapon)}</div>
     <div class="pattern">${escapeHtml(item.pattern)}</div>
-    <div class="meta"><span class="rarity">${escapeHtml(item.rarity)}</span><span>${item.float ? `износ ${item.float[0]}–${item.float[1]}` : ''}</span></div>
+    <div class="meta">
+      <span class="rarity">${escapeHtml(rarityLabel(item.rarity))}</span>
+      <span>${item.float ? `износ ${item.float[0]}–${item.float[1]}` : escapeHtml(item.category)}</span>
+    </div>
     <div class="skin-foot">${footer}</div>
+    ${steamTag(item)}
   </div>`;
 }
 
@@ -240,6 +255,8 @@ function renderWallet() {
   const coinEl = document.querySelector('#wallet .coin');
   if (coinEl) coinEl.textContent = glyph;
   $('#coinBalance').textContent = money(state.econ?.coins ?? 0);
+  const caseHint = $('#caseBalanceHint');
+  if (caseHint) caseHint.textContent = state.user ? `на счету ${money(state.econ?.coins ?? 0)}` : 'войдите через Steam, чтобы открывать кейсы';
   const daily = state.econ?.daily;
   const btn = $('#dailyBtn');
   btn.disabled = !daily?.available;
@@ -453,6 +470,8 @@ async function updateChance() {
     summary.innerHTML = '<span class="muted">Выберите цель апгрейда ↑</span>';
     fill.style.width = '0%';
     $('#chanceText').textContent = '0%';
+    renderWheel(0, null);
+    renderWheelFacts(null);
     spin.disabled = true;
     return;
   }
@@ -465,6 +484,8 @@ async function updateChance() {
     summary.innerHTML = `<span class="muted">Цель: <b>${escapeHtml(state.target.pattern)}</b> · ${money(targetPrice)} · поставьте предметы слева</span>`;
     fill.style.width = '0%';
     $('#chanceText').textContent = '0%';
+    renderWheel(0, state.target);
+    renderWheelFacts({ target: state.target, stake: 0 });
     spin.disabled = true;
     return;
   }
@@ -476,6 +497,8 @@ async function updateChance() {
     });
     state.chance = data.chance;
     const percent = data.chance * 100;
+    renderWheel(data.chance, state.target);
+    renderWheelFacts(data);
     fill.style.width = `${Math.min(100, percent)}%`;
     $('#chanceText').textContent = `${percent.toFixed(percent < 10 ? 2 : 1)}%`;
     const lossNote = data.stake > data.payout ? ' <span class="warn">ставка дороже цели</span>' : '';
@@ -484,34 +507,11 @@ async function updateChance() {
     spin.disabled = state.spinning || data.stake <= 0;
   } catch (error) {
     state.chance = rough / 100;
+    renderWheel(rough / 100, state.target);
     $('#chanceText').textContent = `${rough}%`;
     summary.innerHTML = `<span class="muted">${escapeHtml(error.message)}</span>`;
     spin.disabled = true;
   }
-}
-
-function buildReel(cells, winIndex, loops = 3) {
-  const track = $('#reelTrack');
-  const strip = [];
-  for (let l = 0; l < loops + 1; l += 1) strip.push(...cells);
-  track.innerHTML = strip
-    .map((cell) => `<div class="reel-cell ${cell.isWin ? 'win' : ''}" data-rarity="${escapeHtml(cell.rarity)}">
-        <div class="reel-art">${itemArt(cell, CATEGORY_ICON[cell.category] || '🎁')}</div>
-        <div class="reel-name">${escapeHtml(cell.pattern)}</div>
-        <div class="reel-price">${money(cell.price)}</div>
-      </div>`)
-    .join('');
-
-  const viewportW = $('#reelViewport').clientWidth || 800;
-  const finalIndex = loops * cells.length + winIndex;
-  const offset = finalIndex * CELL_STEP - (viewportW / 2 - CELL_W / 2) + (Math.random() * 60 - 30);
-
-  track.style.transition = 'none';
-  track.style.transform = 'translateX(0px)';
-  requestAnimationFrame(() => {
-    track.style.transition = 'transform 5.5s cubic-bezier(0.1, 0.72, 0.02, 1)';
-    track.style.transform = `translateX(${-offset}px)`;
-  });
 }
 
 async function spin() {
@@ -525,41 +525,46 @@ async function spin() {
       method: 'POST',
       body: JSON.stringify({ uids: state.selection, targetItemId: state.target.id }),
     });
-    buildReel(data.reel, data.winIndex);
+
+    renderWheel(data.chance, data.target);
+    spinWheel(data);
     state.selection = [];
+    renderUpgradePicker();
+    await wait(5400);
+    stopWheel(data.win);
 
-    setTimeout(async () => {
-      $('#resultBox').hidden = false;
-      $('#resultBox').className = `result ${data.win ? 'win' : 'lose'}`;
-      $('#resultBox').innerHTML = `
-        <div class="result-title">${data.win ? '🎉 Апгрейд прошёл!' : '😢 Не повезло'}</div>
-        <div class="result-body">
-          Цель: <b>${escapeHtml(data.target.pattern)}</b> · шанс ${(data.chance * 100).toFixed(2)}% ·
-          ставка ${money(data.stake)} · roll ${data.roll.toFixed(6)}
-          ${data.win ? `→ выигрыш ${money(data.payout)}` : `→ ставка ${money(data.stake)} сгорела`}
-        </div>
-        <button class="btn btn-sm" id="againBtn">ещё раз</button>`;
-      $('#againBtn').onclick = () => { $('#resultBox').hidden = true; };
+    const percent = (data.chance * 100).toFixed(data.chance < 0.1 ? 2 : 1);
+    $('#resultBox').hidden = false;
+    $('#resultBox').className = `result ${data.win ? 'win' : 'lose'}`;
+    $('#resultBox').innerHTML = `
+      <div class="result-title">${data.win ? '🎉 Стрелка в зелёном — апгрейд прошёл!' : '😢 Стрелка в красном — не повезло'}</div>
+      <div class="result-body">
+        Цель: <b>${escapeHtml(data.target.pattern)}</b> · шанс ${percent}% ·
+        ставка ${money(data.stake)} · roll ${data.roll.toFixed(6)}
+        ${data.win ? `→ выигрыш ${money(data.payout)}` : `→ ставка ${money(data.stake)} сгорела`}
+      </div>
+      <button class="btn btn-sm" id="againBtn">ещё раз</button>`;
+    $('#againBtn').onclick = () => { $('#resultBox').hidden = true; };
 
-      $('#fairBox').innerHTML = [
-        ['serverSeed (hash)', data.fair.serverSeedHash],
-        ['clientSeed', data.fair.clientSeed],
-        ['nonce', data.fair.nonce],
-        ['roll', data.roll.toFixed(8)],
-      ]
-        .map(([k, v]) => `<li><span class="muted">${escapeHtml(k)}</span><span class="mono">${escapeHtml(String(v))}</span></li>`)
-        .join('');
+    $('#fairBox').innerHTML = [
+      ['serverSeed (hash)', data.fair.serverSeedHash],
+      ['clientSeed', data.fair.clientSeed],
+      ['nonce', data.fair.nonce],
+      ['roll', data.roll.toFixed(8)],
+      ['остановка стрелки', `${(wheelAngleFor(data.roll, data.chance) % 360).toFixed(1)}°`],
+    ]
+      .map(([k, v]) => `<li><span class="muted">${escapeHtml(k)}</span><span class="mono">${escapeHtml(String(v))}</span></li>`)
+      .join('');
 
-      await loadEconomy();
-      loadHistory();
-      if (state.user?.isAdmin) loadAdmin();
-      state.spinning = false;
-      updateChance();
-    }, 5700);
+    await loadEconomy();
+    loadHistory();
+    if (state.user?.isAdmin) loadAdmin();
+    state.spinning = false;
+    updateChance();
   } catch (error) {
     state.spinning = false;
+    $('#spinBtn').disabled = false;
     toast(error.message, 'err');
-    updateChance();
   }
 }
 
@@ -1101,6 +1106,439 @@ async function loadAdmin() {
   }
 }
 
+/* ================================ КОЛЕСО ================================ */
+/* Апгрейд крутится как колесо фортуны: зелёный сектор — это шанс (растёт от
+   ставки), стрелка делает несколько оборотов и останавливается. Угол остановки
+   выводится из roll, поэтому результат можно пересчитать вручную.           */
+
+const RARITY_COLOR = {
+  consumer: '#b0c3d9',
+  industrial: '#5e98d9',
+  'mil-spec': '#4b69ff',
+  restricted: '#8847ff',
+  classified: '#d32ce6',
+  covert: '#eb4b4b',
+  'exceedingly rare': '#ffd700',
+};
+
+const polar = (cx, cy, radius, deg) => {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+};
+
+/** Кусок кольца (donut) от startDeg до endDeg, 0° — сверху, по часовой стрелке. */
+function donutPath(cx, cy, rOuter, rInner, startDeg, endDeg) {
+  const large = endDeg - startDeg > 180 ? 1 : 0;
+  const [x1, y1] = polar(cx, cy, rOuter, startDeg);
+  const [x2, y2] = polar(cx, cy, rOuter, endDeg);
+  const [x3, y3] = polar(cx, cy, rInner, endDeg);
+  const [x4, y4] = polar(cx, cy, rInner, startDeg);
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${rOuter} ${rOuter} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${x3.toFixed(2)} ${y3.toFixed(2)} A ${rInner} ${rInner} 0 ${large} 0 ${x4.toFixed(2)} ${y4.toFixed(2)} Z`;
+}
+
+/** Рисует колесо под текущий шанс. */
+function renderWheel(chance = 0, target = null) {
+  const svg = $('#wheelSvg');
+  if (!svg) return;
+  const size = 340;
+  const c = size / 2;
+  const rOuter = 152;
+  const rInner = 66;
+  const span = Math.max(1.5, Math.min(358, (Number(chance) || 0) * 360));
+  const percent = (Number(chance) || 0) * 100;
+
+  const ticks = [];
+  for (let deg = 0; deg < 360; deg += 3) {
+    const insideGreen = deg <= span;
+    const [x1, y1] = polar(c, c, rInner + 6, deg);
+    const [x2, y2] = polar(c, c, rOuter - (deg % 15 === 0 ? 14 : 8), deg);
+    ticks.push(
+      `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${insideGreen ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.13)'}" stroke-width="${deg % 15 === 0 ? 2.2 : 1}" />`,
+    );
+  }
+
+  const [gx, gy] = polar(c, c, (rInner + rOuter) / 2, Math.min(span / 2, 40));
+  const [rx, ry] = polar(c, c, (rInner + rOuter) / 2, span + (360 - span) / 2);
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="greenZone" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#7bff9d" />
+        <stop offset="100%" stop-color="#16b45c" />
+      </linearGradient>
+      <linearGradient id="redZone" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#4a2028" />
+        <stop offset="100%" stop-color="#2a1218" />
+      </linearGradient>
+      <filter id="greenGlow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="6" result="blur" />
+        <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
+    </defs>
+    <circle cx="${c}" cy="${c}" r="${rOuter + 6}" fill="#0b0f15" stroke="#222e3b" />
+    <path d="${donutPath(c, c, rOuter, rInner, 0, 360)}" fill="url(#redZone)" />
+    <path d="${donutPath(c, c, rOuter, rInner, 0, span)}" fill="url(#greenZone)" filter="url(#greenGlow)" />
+    <path d="${donutPath(c, c, rOuter, rInner, 0, span)}" fill="url(#greenZone)" />
+    ${ticks.join('')}
+    <circle cx="${c}" cy="${c}" r="${rOuter}" fill="none" stroke="#2b3849" stroke-width="2" />
+    <circle cx="${c}" cy="${c}" r="${rInner}" fill="none" stroke="#2b3849" stroke-width="2" />
+    <text x="${gx.toFixed(1)}" y="${gy.toFixed(1)}" class="wheel-label wheel-label-win" text-anchor="middle">${percent.toFixed(percent < 10 ? 2 : 1)}%</text>
+    ${span < 300 ? `<text x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" class="wheel-label wheel-label-lose" text-anchor="middle">мимо</text>` : ''}
+  `;
+
+  const hub = $('#wheelHubArt');
+  const label = $('#wheelHubLabel');
+  if (hub) {
+    hub.innerHTML = target && target.image
+      ? `<img src="${escapeHtml(target.image)}" alt="" onerror="this.style.display='none'">`
+      : '<span>🎯</span>';
+  }
+  if (label) label.textContent = target ? target.pattern : 'цель не выбрана';
+}
+
+/**
+ * Угол остановки стрелки: внутри зелёного сектора при выигрыше и в красном — при проигрыше.
+ * Считается из того же roll, поэтому совпадает с «честным» результатом розыгрыша.
+ */
+function wheelAngleFor(roll, chance) {
+  const value = Math.max(0.0001, Math.min(0.9999, Number(chance) || 0));
+  const span = value * 360;
+  const point = Math.min(0.999999, Number(roll) || 0);
+  return point < value
+    ? (point / value) * span
+    : span + ((point - value) / Math.max(1 - value, 1e-9)) * (360 - span);
+}
+
+/** Крутит стрелку. Остановка считается из roll — то же, что вернул сервер. */
+function spinWheel(data) {
+  const angle = wheelAngleFor(data.roll, data.chance);
+
+  const needle = $('#wheelNeedle');
+  const stage = $('#wheelStage');
+  if (!needle) return;
+  const turns = 5 + ((Number(data.fair?.nonce) || 0) % 3);
+  const current = state.wheelAngle || 0;
+  const delta = (((angle - current) % 360) + 360) % 360;
+  const finalAngle = current + delta + 360 * turns;
+  state.wheelAngle = finalAngle % 360;
+
+  stage?.classList.add('spinning');
+  needle.style.transition = 'none';
+  needle.style.transform = `translateX(-50%) rotate(${current}deg)`;
+  requestAnimationFrame(() => {
+    needle.style.transition = 'transform 5.2s cubic-bezier(0.12, 0.68, 0.02, 1)';
+    needle.style.transform = `translateX(-50%) rotate(${finalAngle}deg)`;
+  });
+}
+
+function stopWheel(win) {
+  const stage = $('#wheelStage');
+  stage?.classList.remove('spinning');
+  stage?.classList.add(win ? 'win' : 'lose');
+  setTimeout(() => stage?.classList.remove('win', 'lose'), 4000);
+}
+
+/** Карточка цели рядом с колесом: что стоит на кону. */
+function renderWheelFacts(preview) {
+  const box = $('#wheelTarget');
+  const facts = $('#wheelFacts');
+  if (!box) return;
+  const target = preview?.target || state.target;
+  if (!target) {
+    box.innerHTML = '<p class="empty">Выберите цель апгрейда — её картинка появится в центре колеса.</p>';
+    if (facts) facts.innerHTML = '';
+    return;
+  }
+  box.innerHTML = `<div class="wheel-target-card" data-rarity="${escapeHtml(target.rarity)}" style="--rar:${RARITY_COLOR[target.rarity] || '#8b98a8'}">
+      <div class="wheel-target-art">${itemArt(target, CATEGORY_ICON[target.category] || '🎁')}</div>
+      <div>
+        <div class="wheel-target-name">${escapeHtml(target.weapon)} — ${escapeHtml(target.pattern)}</div>
+        <div class="muted small">${escapeHtml(rarityLabel(target.rarity))}${target.float ? ` · износ ${target.float[0]}–${target.float[1]}` : ''}</div>
+        <div class="price">${money(target.price)}${target.steamPrice ? ` <span class="steam-tag">Steam ${money(target.steamPrice.rub * (state.site?.coinRateRub || 10))}</span>` : ''}</div>
+      </div>
+    </div>`;
+  if (!facts) return;
+  const rows = [
+    ['цена цели', money(target.price)],
+    ['ставка', money(preview?.stake || 0)],
+    ['множитель', preview?.multiplier ? `×${Number(preview.multiplier).toFixed(1)}` : '—'],
+    ['выплата при победе', money(preview?.payout || target.price)],
+  ];
+  facts.innerHTML = rows
+    .map(([key, value]) => `<li><span class="muted">${escapeHtml(key)}</span><span>${value}</span></li>`)
+    .join('');
+}
+
+/* ========================= ЦЕНЫ STEAM (АДМИН) =========================== */
+
+function renderPriceStatus(status) {
+  const box = $('#priceStatus');
+  if (!box || !status) return;
+  const when = status.lastSyncAt ? new Date(status.lastSyncAt).toLocaleString('ru-RU') : 'ещё не было';
+  const result = status.lastResult;
+  box.innerHTML = `
+    <div class="price-status-grid">
+      <div><span class="muted">обновлено цен</span><b>${status.synced} из ${status.total}</b></div>
+      <div><span class="muted">последний проход</span><b>${escapeHtml(when)}</b></div>
+      <div><span class="muted">источник</span><b>${escapeHtml(status.provider)}</b></div>
+      <div><span class="muted">пауза / порция</span><b>${status.delayMs} мс · ${status.batch}</b></div>
+      <div><span class="muted">1 монета</span><b>${status.coinRateRub} ₽</b></div>
+      <div><span class="muted">курс $</span><b>${status.usdRub} ₽</b></div>
+    </div>
+    ${result ? `<p class="muted small">Прошлый проход: обновлено ${result.updated}, пропущено ${result.skipped}, ошибок ${result.failed}.</p>` : ''}
+    ${status.lastError ? `<p class="warn">Ошибка: ${escapeHtml(status.lastError)}</p>` : ''}
+    ${status.running ? '<p class="pill pill-ok">Синхронизация идёт…</p>' : ''}`;
+}
+
+async function loadPriceStatus() {
+  try {
+    renderPriceStatus(await api('/api/prices/status'));
+  } catch {
+    /* админка скрыта — нечего показывать */
+  }
+}
+
+async function syncPrices() {
+  const button = $('#priceSyncBtn');
+  if (button) button.disabled = true;
+  try {
+    const data = await api('/api/admin/prices/sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        limit: Number($('#priceLimit')?.value || 150),
+        force: Boolean($('#priceForce')?.checked),
+      }),
+    });
+    renderPriceStatus(data.status);
+    const { updated = 0, skipped = 0, failed = 0 } = data.result || {};
+    toast(`Цены обновлены: ${updated}, пропущено ${skipped}, ошибок ${failed}`, failed ? 'err' : 'ok');
+    await loadConfig();
+    loadCatalog();
+    loadTargets();
+    renderCases();
+    if (state.target) updateChance();
+  } catch (error) {
+    toast(error.message, 'err');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function resetPrices() {
+  try {
+    renderPriceStatus((await api('/api/admin/prices/reset', { method: 'POST' })).status);
+    toast('Цены Steam сброшены — каталог вернулся к базовым ценам', 'ok');
+    await loadConfig();
+    loadCatalog();
+    loadTargets();
+    renderCases();
+    if (state.target) updateChance();
+  } catch (error) {
+    toast(error.message, 'err');
+  }
+}
+
+/* ================================ КЕЙСЫ ================================= */
+
+async function loadCases() {
+  try {
+    const { cases } = await api('/api/cases');
+    state.cases = cases;
+    renderCases();
+  } catch (error) {
+    const grid = $('#caseGrid');
+    if (grid) grid.innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+/** Шанс в понятном виде: 12.4% или «1 из 8000» для совсем редкого. */
+function chanceText(chance) {
+  const value = Number(chance) || 0;
+  if (value <= 0) return '—';
+  const percent = value * 100;
+  if (percent >= 0.1) return `${percent.toFixed(1)}%`;
+  if (percent >= 0.01) return `${percent.toFixed(2)}%`;
+  return `1 из ${Math.max(2, Math.round(1 / value)).toLocaleString('ru-RU')}`;
+}
+
+const TIER_LABEL = { common: 'обычные', uncommon: 'необычные', rare: 'редкие', legendary: 'легендарные' };
+const TIER_COLOR = { common: '#b0c3d9', uncommon: '#4b69ff', rare: '#d32ce6', legendary: '#ffd700' };
+
+const rarityLabel = (rarity) => ({
+  consumer: 'ширпотреб',
+  industrial: 'промышленное',
+  'mil-spec': 'армейское',
+  restricted: 'запрещённое',
+  classified: 'секретное',
+  covert: 'тайное',
+  'exceedingly rare': 'экстраординарное',
+}[rarity] || rarity);
+
+function renderCases() {
+  const grid = $('#caseGrid');
+  if (!grid) return;
+  const list = state.cases || [];
+  if (!list.length) {
+    grid.innerHTML = '<p class="empty">Кейсы пока не настроены.</p>';
+    return;
+  }
+
+  grid.innerHTML = list
+    .map((box) => {
+      const rarities = Object.entries(box.odds || {});
+      const chips = rarities.length > 1
+        ? rarities.slice(0, 4).map(([rarity, chance]) => `<span class="odds-chip" style="--rar:${RARITY_COLOR[rarity] || '#8b98a8'}">
+              <i></i>${escapeHtml(rarityLabel(rarity))} ${chanceText(chance)}
+            </span>`)
+        : Object.entries(box.tiers || {})
+            .filter(([, chance]) => chance > 0.001)
+            .map(([tier, chance]) => `<span class="odds-chip" style="--rar:${TIER_COLOR[tier] || '#8b98a8'}">
+              <i></i>${escapeHtml(TIER_LABEL[tier] || tier)} ${chanceText(chance)}
+            </span>`);
+      const odds = chips.join('');
+      const shots = (box.showcase || [])
+        .map((item) => `<figure class="case-shot" title="${escapeHtml(`${item.weapon} — ${item.pattern}`)} · ${chanceText(item.chance)}">
+            ${item.image ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy">` : `<span>${CATEGORY_ICON[item.weapon] || '🎁'}</span>`}
+            <figcaption>${chanceText(item.chance)}</figcaption>
+          </figure>`)
+        .join('');
+      return `<article class="case-card" style="--accent:${escapeHtml(box.accent)}">
+          <div class="case-visual">
+            <div class="case-crate">
+              <span class="case-crate-icon">${box.icon || '🎁'}</span>
+              <span class="case-crate-shine"></span>
+            </div>
+            <div class="case-shots">${shots}</div>
+          </div>
+          <div class="case-body">
+            <h3>${escapeHtml(box.name)}</h3>
+            <p class="muted small">${escapeHtml(box.blurb || '')}</p>
+            <div class="case-odds">${odds}</div>
+            <ul class="kv case-facts">
+              <li><span class="muted">предметов</span><span>${box.itemsCount}</span></li>
+              <li><span class="muted">от и до</span><span>${money(box.minPrice)} — ${money(box.maxPrice)}</span></li>
+              <li><span class="muted">ожидание дропа</span><span>${money(box.expectation)}</span></li>
+            </ul>
+            <div class="case-foot">
+              <span class="price">${money(box.price)}</span>
+              <button class="btn btn-buy btn-sm" data-case="${escapeHtml(box.id)}">Открыть</button>
+            </div>
+          </div>
+        </article>`;
+    })
+    .join('');
+
+  $$('#caseGrid [data-case]').forEach((button) => {
+    button.onclick = () => openCase(button.dataset.case, Number($('#caseCount')?.value || 1));
+  });
+}
+
+function buildCaseReel(cells, winIndex) {
+  const track = $('#caseReelTrack');
+  if (!track) return 0;
+  const strip = [];
+  for (let l = 0; l < 3; l += 1) strip.push(...cells);
+  track.innerHTML = strip
+    .map((cell) => `<div class="case-cell ${cell.isWin ? 'win' : ''}" data-rarity="${escapeHtml(cell.rarity)}">
+        <div class="case-cell-art">${itemArt(cell, CATEGORY_ICON[cell.category] || '🎁')}</div>
+        <div class="case-cell-name">${escapeHtml(cell.pattern)}</div>
+      </div>`)
+    .join('');
+  return 2 * cells.length + winIndex;
+}
+
+const CASE_CELL_W = 132;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runCaseReel(data) {
+  const winIndex = buildCaseReel(data.reel, data.winIndex);
+  const stage = $('#caseStageBlock');
+  const reel = $('#caseReel');
+  const prizes = $('#casePrizes');
+  if (prizes) prizes.hidden = true;
+  stage.hidden = false;
+  stage.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  reel.classList.add('rolling');
+
+  const viewport = reel.querySelector('.case-reel-viewport');
+  const viewportW = viewport?.clientWidth || 800;
+  const offset = winIndex * CASE_CELL_W - (viewportW / 2 - CASE_CELL_W / 2) + (Math.random() * 60 - 30);
+  const track = $('#caseReelTrack');
+  track.style.transition = 'none';
+  track.style.transform = 'translateX(0px)';
+  await wait(30);
+  track.style.transition = 'transform 4.6s cubic-bezier(0.08, 0.7, 0.02, 1)';
+  track.style.transform = `translateX(${-offset}px)`;
+  await wait(4700);
+  reel.classList.remove('rolling');
+}
+
+function renderPrizes(prizes, box) {
+  const wrap = $('#casePrizes');
+  if (!wrap) return;
+  wrap.hidden = false;
+  wrap.innerHTML = `<div class="case-prizes-grid">${prizes
+    .map((prize, index) => `<div class="case-prize" data-rarity="${escapeHtml(prize.rarity)}" style="--rar:${RARITY_COLOR[prize.rarity] || '#8b98a8'};animation-delay:${index * 90}ms">
+        <div class="case-prize-burst"></div>
+        <div class="case-prize-art">${prize.image ? `<img src="${escapeHtml(prize.image)}" alt="">` : `<span>${CATEGORY_ICON[prize.category] || '🎁'}</span>`}</div>
+        <div class="case-prize-name">${escapeHtml(prize.weapon)} — ${escapeHtml(prize.pattern)}</div>
+        <div class="case-prize-meta"><span class="rarity">${escapeHtml(rarityLabel(prize.rarity))}</span><span class="price">${money(prize.price)}</span></div>
+        <div class="case-prize-sparkles">${'<i></i>'.repeat(8)}</div>
+      </div>`)
+    .join('')}</div>
+    <p class="muted small case-prize-total">Итого с кейса «${escapeHtml(box?.name || '')}»: ${prizes.length} × ${money(box?.price || 0)} = ${money((box?.price || 0) * prizes.length)} ставка, дроп на ${money(prizes.reduce((sum, p) => sum + p.price, 0))}</p>`;
+}
+
+async function openCase(caseId, times = 1) {
+  if (state.caseOpening) return;
+  if (!state.user) return toast('Сначала войдите через Steam', 'err');
+  state.caseOpening = true;
+  const prizes = [];
+  let box = null;
+  try {
+    for (let i = 0; i < Math.max(1, Math.min(times, 5)); i += 1) {
+      const data = await api('/api/case/open', { method: 'POST', body: JSON.stringify({ caseId }) });
+      box = data.case;
+      prizes.push(data.prize);
+      $('#caseStageName').textContent = box?.name || '';
+      await runCaseReel(data);
+      if (i > 0) await wait(120);
+    }
+    renderPrizes(prizes, box);
+    await loadEconomy();
+    loadCaseHistory();
+    $('#caseAgain').dataset.case = caseId;
+  } catch (error) {
+    toast(error.message, 'err');
+    const stage = $('#caseStageBlock');
+    if (stage && prizes.length === 0) stage.hidden = true;
+    if (prizes.length) renderPrizes(prizes, box);
+  } finally {
+    state.caseOpening = false;
+  }
+}
+
+async function loadCaseHistory() {
+  const feed = $('#caseHistoryFeed');
+  if (!feed) return;
+  try {
+    const { history } = await api('/api/history?kind=case&limit=15');
+    feed.innerHTML = history.length
+      ? history
+          .map((entry) => `<div class="hist-row win">
+              <span class="mono">${new Date(entry.at).toLocaleTimeString('ru-RU')}</span>
+              <span class="hist-name">${entry.target.image ? `<img class="hist-img" src="${escapeHtml(entry.target.image)}" alt="" loading="lazy">` : '🎁'} ${escapeHtml(entry.target.pattern)}</span>
+              <span class="muted">${escapeHtml(entry.caseName || 'кейс')}</span>
+              <span>${money(entry.stake)} → ${money(entry.payout)}</span>
+              <span class="hist-badge win">${money(entry.payout - entry.stake >= 0 ? `+${entry.payout - entry.stake}` : entry.payout - entry.stake)}</span>
+            </div>`)
+          .join('')
+      : '<p class="empty">Кейсы ещё не открывали.</p>';
+  } catch {
+    feed.innerHTML = '<p class="empty">История недоступна.</p>';
+  }
+}
+
 /* ------------------------- валюта и шансы (админ) ----------------------- */
 
 function renderCurrencyEditor() {
@@ -1210,6 +1648,7 @@ function bindUi() {
       if (tab.dataset.tab === 'equip') loadEquip();
       if (tab.dataset.tab === 'vault') loadEconomy();
       if (tab.dataset.tab === 'upgrade') { loadEconomy(); loadTargets(); loadHistory(); }
+      if (tab.dataset.tab === 'cases') { loadCases(); loadCaseHistory(); renderWallet(); }
     };
   });
 
@@ -1271,6 +1710,18 @@ function bindUi() {
   $('#targetNext').onclick = () => { state.targetPage += 1; loadTargets(); };
 
   $('#spinBtn').onclick = spin;
+  $('#caseAgain') && ($('#caseAgain').onclick = () => {
+    const caseId = $('#caseAgain').dataset.case;
+    if (caseId) openCase(caseId, Number($('#caseCount')?.value || 1));
+  });
+  $('#caseClose') && ($('#caseClose').onclick = () => {
+    const stage = $('#caseStageBlock');
+    if (stage) stage.hidden = true;
+    const prizes = $('#casePrizes');
+    if (prizes) prizes.hidden = true;
+  });
+  $('#priceSyncBtn') && ($('#priceSyncBtn').onclick = syncPrices);
+  $('#priceResetBtn') && ($('#priceResetBtn').onclick = resetPrices);
   $('#clearSelection').onclick = () => { state.selection = []; renderUpgradePicker(); updateChance(); };
   $('#selectCheap').onclick = () => {
     const cheap = (state.econ?.items || []).slice().sort((a, b) => a.price - b.price).slice(0, 5).map((i) => i.uid);
@@ -1361,10 +1812,14 @@ function bindUi() {
     await loadEquip();
     await loadChances();
     await loadTargets();
+    updateChance();
+    await loadCases();
     await loadHistory();
+    await loadCaseHistory();
     await loadServers();
     await renderLoadouts();
     await loadAdmin();
+    await loadPriceStatus();
   } catch (error) {
     toast(error.message, 'err');
   }

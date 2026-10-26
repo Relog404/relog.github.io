@@ -41,11 +41,34 @@ export function loadItems() {
   }
 
   const overrides = store.getCatalogOverrides();
+  const prices = store.getPrices();
+  const coinRate = Math.max(0.01, Number(store.getSiteSettings().coinRateRub) || 10);
+
   cache = [...map.values()]
     .filter((item) => overrides[item.id]?.hidden !== true)
-    .map((item) => (Number(overrides[item.id]?.price) > 0 ? { ...item, price: Math.round(Number(overrides[item.id].price)) } : item));
+    .map((item) => {
+      const withOverride = Number(overrides[item.id]?.price) > 0
+        ? { ...item, price: Math.round(Number(overrides[item.id].price)) }
+        : item;
+      return applySteamPrice(withOverride, prices[item.id], coinRate);
+    });
 
   return cache;
+}
+
+/**
+ * Реальная цена с площадки Steam перекрывает базовую цену каталога.
+ * Рубли → монеты по курсу настроек (монета остаётся внутренней валютой).
+ */
+function applySteamPrice(item, price, coinRate) {
+  if (!price || !(Number(price.rub) > 0)) return { ...item, steamPrice: null };
+  const rub = Math.round(Number(price.rub));
+  const usd = Number(price.usd) > 0 ? Number(price.usd) : Number((rub / 95).toFixed(2));
+  return {
+    ...item,
+    price: Math.max(1, Math.round(rub / coinRate)),
+    steamPrice: { rub, usd, updatedAt: price.updatedAt || null, name: price.name || '' },
+  };
 }
 
 function normalize(item, index) {

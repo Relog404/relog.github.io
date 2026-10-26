@@ -15,6 +15,7 @@ const emptyStore = () => ({
   settings: null, // настройки сайта (шансы апгрейда и т.п.), заполняются лениво
   customItems: [], // предметы, добавленные админом через админку
   catalogOverrides: {}, // { [itemId]: { price?, hidden? } }
+  prices: { items: {}, meta: null }, // реальные цены с торговой площадки Steam
 });
 
 let cache = null;
@@ -386,6 +387,7 @@ export function defaultSiteSettings() {
   return {
     currency: config.currency,           // coins | rub | usd
     rates: { rub: config.rateRub, usd: config.rateUsd },
+    coinRateRub: config.coinRateRub,     // сколько рублей в одной виртуальной монете
   };
 }
 
@@ -397,9 +399,12 @@ export function getSiteSettings() {
     save();
   }
   const site = store.settings.site;
+  const defaults = defaultSiteSettings();
+  const rate = Number(site.coinRateRub);
   return {
     currency: ['coins', 'rub', 'usd'].includes(site.currency) ? site.currency : 'coins',
-    rates: { ...defaultSiteSettings().rates, ...(site.rates || {}) },
+    rates: { ...defaults.rates, ...(site.rates || {}) },
+    coinRateRub: Number.isFinite(rate) && rate > 0 ? rate : defaults.coinRateRub,
   };
 }
 
@@ -414,7 +419,56 @@ export function patchSiteSettings(patch) {
       if (Number.isFinite(value) && value > 0 && value < 1_000_000) next.rates[key] = value;
     }
   }
+  const rate = Number(patch.coinRateRub);
+  if (Number.isFinite(rate) && rate > 0 && rate < 1_000_000) next.coinRateRub = rate;
   store.settings.site = next;
   save();
   return next;
+}
+
+
+/* ------------------- реальные цены с площадки Steam -------------------- */
+
+/** { [itemId]: { rub, usd, name, updatedAt } } */
+export function getPrices() {
+  const store = load();
+  if (!store.prices || typeof store.prices !== 'object') store.prices = { items: {}, meta: null };
+  return store.prices.items || {};
+}
+
+/** Сводка по последней синхронизации цен. */
+export function getPricesMeta() {
+  const store = load();
+  const meta = (store.prices && store.prices.meta) || {};
+  return {
+    synced: Object.keys(getPrices()).length,
+    lastSyncAt: meta.lastSyncAt || null,
+    lastError: meta.lastError || null,
+    lastRun: meta.lastRun || null,
+    running: Boolean(meta.running),
+  };
+}
+
+export function setPrice(id, data) {
+  const store = load();
+  store.prices = store.prices || { items: {}, meta: null };
+  store.prices.items = store.prices.items || {};
+  if (data === null) delete store.prices.items[id];
+  else store.prices.items[id] = data;
+  save(store);
+}
+
+export function setPricesMeta(patch) {
+  const store = load();
+  store.prices = store.prices || { items: {}, meta: null };
+  store.prices.meta = { ...(store.prices.meta || {}), ...patch };
+  save(store);
+  return store.prices.meta;
+}
+
+/** Очистить кэш цен — каталог вернётся к базовым ценам из data/catalog.json. */
+export function clearPrices() {
+  const store = load();
+  store.prices = { items: {}, meta: { clearedAt: new Date().toISOString() } };
+  save(store);
 }

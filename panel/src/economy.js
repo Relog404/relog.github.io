@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import * as store from './store.js';
 import * as items from './items.js';
+import * as cases from './cases.js';
 const { findItem, findSlot, itemFitsSlot, slotIndex } = items;
 
 /**
@@ -99,7 +100,7 @@ export function stateFor(steamId) {
     Object.assign(econ, {
       coins: START_COINS,
       items: [],
-      stats: { wagered: 0, won: 0, upgrades: 0, wins: 0, bestWin: 0, bought: 0, sold: 0 },
+      stats: { wagered: 0, won: 0, upgrades: 0, wins: 0, bestWin: 0, bought: 0, sold: 0, cases: 0, caseSpent: 0 },
       banned: false,
       createdAt: new Date().toISOString(),
       ...newSeeds(),
@@ -267,6 +268,7 @@ export function playUpgrade(steamId, uids, targetItemId) {
       rarity: preview.target.rarity,
       image: preview.target.image || '',
     },
+    kind: 'upgrade',
     multiplier: preview.multiplier,
     edge: preview.edge,
     consumed: consumed.length,
@@ -292,6 +294,90 @@ function buildReel(stake, target, winIndex) {
     }
   }
   return cells;
+}
+
+/* --------------------------------- кейсы -------------------------------- */
+
+export function listCases() {
+  return cases.listCases();
+}
+
+export function findCase(id) {
+  return cases.findCase(id);
+}
+
+/**
+ * Открытие кейса за виртуальные монеты.
+ * Исход считается тем же provably-fair механизмом, что и апгрейд:
+ * roll = HMAC_SHA256(serverSeed, "clientSeed:nonce") / 2^32.
+ */
+export function openCase(steamId, caseId) {
+  const caseDef = cases.findCase(caseId);
+  if (!caseDef) throw Object.assign(new Error('Кейс не найден'), { code: 'no_case' });
+
+  const econ = stateFor(steamId);
+  if (econ.banned) throw Object.assign(new Error('Аккаунт заблокирован'), { code: 'banned' });
+  if (econ.coins < caseDef.price) {
+    throw Object.assign(new Error(`Недостаточно монет: нужно ${caseDef.price}`), { code: 'no_coins' });
+  }
+
+  const roll = fairRoll(econ.serverSeed, econ.clientSeed, econ.nonce);
+  const nonce = econ.nonce;
+  econ.nonce += 1;
+
+  const prize = cases.pickPrize(caseDef, roll);
+  const winIndex = Math.floor(roll * cases.reelCells) % cases.reelCells;
+
+  econ.coins -= caseDef.price;
+  econ.stats.cases = (econ.stats.cases || 0) + 1;
+  econ.stats.caseSpent = (econ.stats.caseSpent || 0) + caseDef.price;
+  const uid = crypto.randomUUID();
+  econ.items.push({ uid, itemId: prize.id, price: prize.price, acquiredAt: new Date().toISOString() });
+  store.saveEconomy(steamId, econ);
+
+  const entry = {
+    id: crypto.randomUUID(),
+    kind: 'case',
+    at: new Date().toISOString(),
+    steamId: String(steamId),
+    stake: caseDef.price,
+    payout: prize.price,
+    chance: 0,
+    roll,
+    win: true,
+    caseId: caseDef.id,
+    caseName: caseDef.name,
+    target: {
+      id: prize.id,
+      weapon: prize.weapon,
+      pattern: prize.pattern,
+      category: prize.category,
+      rarity: prize.rarity,
+      image: prize.image || '',
+    },
+    fair: { serverSeedHash: econ.serverSeedHash, clientSeed: econ.clientSeed, nonce },
+  };
+  store.pushHistory(entry);
+
+  return {
+    ...entry,
+    prize: {
+      id: prize.id,
+      weapon: prize.weapon,
+      pattern: prize.pattern,
+      category: prize.category,
+      rarity: prize.rarity,
+      price: prize.price,
+      image: prize.image || '',
+      float: prize.float || null,
+    },
+    uid,
+    coins: econ.coins,
+    case: cases.listCases().find((c) => c.id === caseDef.id) || caseDef,
+    winIndex,
+    reelCells: cases.reelCells,
+    reel: cases.reelFor(caseDef, prize, winIndex),
+  };
 }
 
 /* ------------------------------ статистика ------------------------------ */

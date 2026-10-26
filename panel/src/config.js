@@ -55,6 +55,32 @@ export const config = {
   rateRub: Math.min(Math.max(Number(env.RATE_RUB || 1), 0.0001), 1_000_000),
   rateUsd: Math.min(Math.max(Number(env.RATE_USD || 0.011), 0.0001), 1_000_000),
 
+  /**
+   * Курс виртуальной монеты к рублю: цена предмета со Steam (в ₽) делится на это число.
+   * Монеты остаются внутренней валютой — это просто масштаб, чтобы цены были удобными.
+   */
+  coinRateRub: Math.min(Math.max(Number(env.COIN_RATE_RUB || 10), 0.01), 1_000_000),
+
+  /** Доля цены кейса относительно математического ожидания дропа (дом всегда в плюсе). */
+  caseEdge: Math.min(Math.max(Number(env.CASE_EDGE || 0.95), 0.1), 1.2),
+
+  /**
+   * Реальные цены с торговой площадки Steam. Работает на машине, где у панели есть
+   * доступ в интернет: админ жмёт «обновить цены» в админке, либо включается автосинк.
+   */
+  priceSync: {
+    enabled: bool(env.PRICE_SYNC_ENABLED, true),
+    /** Пауза между запросами: Steam режет частые запросы (429). */
+    delayMs: Math.min(Math.max(Number(env.PRICE_SYNC_DELAY_MS || 1200), 100), 60_000),
+    /** Сколько предметов обновлять за один проход. */
+    batch: Math.min(Math.max(Number(env.PRICE_SYNC_BATCH || 150), 1), 2000),
+    /** Курс доллара к рублю, чтобы не делать второй запрос к Steam ради USD. */
+    usdRub: Math.min(Math.max(Number(env.USD_RUB || 95), 1), 1000),
+    /** Автообновление цен, раз в N часов (0 — выключено). */
+    autoHours: Math.min(Math.max(Number(env.PRICE_SYNC_HOURS || 0), 0), 720),
+    userAgent: env.PRICE_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) cs2-panel/1.0',
+  },
+
   /** Базовый коэффициент апгрейда по умолчанию (шанс = ставка / цена цели * edge). */
   upgradeEdge: Math.min(Math.max(Number(env.UPGRADE_EDGE || 0.95), 0.1), 1),
 

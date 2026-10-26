@@ -44,6 +44,7 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab" data-tab="upgrade">Апгрейд</button>
+    <button class="tab" data-tab="cases">Кейсы</button>
     <button class="tab active" data-tab="shop">Каталог</button>
     <button class="tab" data-tab="vault">Хранилище</button>
     <button class="tab" data-tab="equip">Экипировка</button>
@@ -109,10 +110,24 @@
           <button class="btn btn-spin" id="spinBtn" disabled>Крутить</button>
         </div>
 
-        <div class="reel">
-          <div class="reel-marker"></div>
-          <div class="reel-viewport" id="reelViewport">
-            <div class="reel-track" id="reelTrack"></div>
+        <div class="wheel-row">
+          <div class="wheel-stage" id="wheelStage">
+            <svg class="wheel-svg" id="wheelSvg" viewBox="0 0 340 340" aria-hidden="true"></svg>
+            <div class="wheel-needle" id="wheelNeedle"></div>
+            <div class="wheel-hub" id="wheelHub">
+              <div class="wheel-hub-art" id="wheelHubArt">🎯</div>
+              <div class="wheel-hub-label" id="wheelHubLabel">цель не выбрана</div>
+            </div>
+          </div>
+
+          <div class="wheel-info">
+            <div class="wheel-target" id="wheelTarget"><p class="empty">Выберите цель апгрейда — её картинка появится в центре колеса.</p></div>
+            <ul class="kv" id="wheelFacts"></ul>
+            <p class="muted small">
+              Зелёный сектор — это ваш шанс: он растёт вместе со ставкой. Стрелка крутится и останавливается
+              на случайном месте колеса: попала в зелёное — цель ваша, попала в красное — ставка сгорает.
+              Остановка считается из <code>roll</code>, а не «подгоняется» под результат.
+            </p>
           </div>
         </div>
 
@@ -132,6 +147,50 @@
       <div class="block">
         <h2>Последние розыгрыши</h2>
         <div class="history" id="historyFeed"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------- КЕЙСЫ -------------------------------- -->
+    <section class="panel" id="tab-cases">
+      <div class="block">
+        <h2>Кейсы</h2>
+        <p class="muted small">
+          Цена кейса считается из его наполнения: математическое ожидание дропа × 0.95.
+          Открытие стоит виртуальные монеты, приз падает в хранилище. Вывода наружу и покупок за реальные деньги нет.
+        </p>
+        <div class="row case-open-row">
+          <label class="row-label">Открыть за раз
+            <select id="caseCount">
+              <option value="1">1 кейс</option>
+              <option value="3">3 кейса</option>
+              <option value="5">5 кейсов</option>
+            </select>
+          </label>
+          <span class="muted small" id="caseBalanceHint"></span>
+        </div>
+        <div class="cases-grid" id="caseGrid"></div>
+      </div>
+
+      <div class="block case-stage-block" id="caseStageBlock" hidden>
+        <h2>Открытие <span class="muted small" id="caseStageName"></span></h2>
+        <div class="case-stage">
+          <div class="case-reel" id="caseReel">
+            <div class="case-marker"></div>
+            <div class="case-reel-viewport">
+              <div class="case-reel-track" id="caseReelTrack"></div>
+            </div>
+          </div>
+          <div class="case-prizes" id="casePrizes" hidden></div>
+        </div>
+        <div class="row">
+          <button class="btn btn-ghost btn-sm" id="caseAgain">Открыть ещё</button>
+          <button class="btn btn-ghost btn-sm" id="caseClose">Закрыть</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <h2>Последние открытия</h2>
+        <div class="history" id="caseHistoryFeed"></div>
       </div>
     </section>
 
@@ -343,6 +402,23 @@
           Курс: сколько рублей/долларов в одной монете.
         </p>
         <div class="row" id="currencySettings"></div>
+      </div>
+
+      <div class="block">
+        <h2>Цены Steam</h2>
+        <p class="muted small">
+          Реальные цены берутся с торговой площадки Steam (<code>priceoverview</code>, appid 730) и перекрывают
+          базовые цены каталога. Синхронизация идёт порциями с паузой — Steam режет частые запросы.
+        </p>
+        <div id="priceStatus" class="price-status"></div>
+        <div class="row">
+          <label class="row-label">Предметов за проход
+            <input type="number" id="priceLimit" min="1" max="2000" value="150" style="width:110px">
+          </label>
+          <label class="checkbox"><input type="checkbox" id="priceForce"> обновить и уже известные</label>
+          <button class="btn" id="priceSyncBtn">Обновить цены</button>
+          <button class="btn btn-ghost" id="priceResetBtn">Сбросить к базовым</button>
+        </div>
       </div>
 
       <div class="block">

@@ -5,6 +5,7 @@ import { config, isAdmin, ROOT } from './config.js';
 import * as store from './store.js';
 import * as items from './items.js';
 import * as economy from './economy.js';
+import * as prices from './prices.js';
 import { execRcon, parseStatus, demoStatus, RconError } from './rcon.js';
 import { steamLoginUrl, verifySteamLogin, getPlayerSummaries, createSession, readSession } from './steam.js';
 
@@ -351,8 +352,39 @@ export function createApp() {
     res.json(economy.playUpgrade(req.user.steamId, req.body?.uids || [], req.body?.targetItemId));
   }));
 
+  /** Лента последних розыгрышей: ?kind=upgrade|case — всё вместе по умолчанию. */
+  app.get('/api/history', (req, res) => {
+    const kind = String(req.query.kind || '').trim();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const history = store.getHistory(200).filter((entry) => !kind || (entry.kind || 'upgrade') === kind);
+    res.json({ history: history.slice(0, limit) });
+  });
+
   app.get('/api/upgrade/history', (_req, res) => {
-    res.json({ history: store.getHistory(20) });
+    res.json({ history: store.getHistory(20).filter((entry) => (entry.kind || 'upgrade') === 'upgrade') });
+  });
+
+  /* --------------------------------- кейсы -------------------------------- */
+
+  /** Список кейсов: цена считается из наполнения (ожидание × CASE_EDGE). */
+  app.get('/api/cases', (_req, res) => {
+    res.json({ cases: economy.listCases() });
+  });
+
+  app.get('/api/cases/:id', (req, res) => {
+    const found = economy.findCase(req.params.id);
+    if (!found) return res.status(404).json({ error: 'Кейс не найден' });
+    res.json(found);
+  });
+
+  app.post('/api/case/open', requireAuth, economyRoute((req, res) => {
+    res.json(economy.openCase(req.user.steamId, req.body?.caseId));
+  }));
+
+  /* --------------------- реальные цены с площадки Steam ------------------- */
+
+  app.get('/api/prices/status', (_req, res) => {
+    res.json(prices.priceStatus());
   });
 
   /** Проверка честности розыгрыша: тот же roll при тех же seed'ах. */
@@ -448,6 +480,20 @@ export function createApp() {
 
   app.patch('/api/admin/settings', requireAdmin, (req, res) => {
     res.json(store.patchSiteSettings(req.body || {}));
+  });
+
+  /** Запустить обновление цен со Steam. Порция ограничена, чтобы не ловить 429. */
+  app.post('/api/admin/prices/sync', requireAdmin, asyncRoute(async (req, res) => {
+    const limit = Math.min(Math.max(Number(req.body?.limit) || config.priceSync.batch, 1), 2000);
+    const result = await prices.syncPrices({ limit, force: Boolean(req.body?.force) });
+    res.json({ status: prices.priceStatus(), result });
+  }));
+
+  /** Сбросить цены Steam — каталог вернётся к базовым ценам из data/catalog.json. */
+  app.post('/api/admin/prices/reset', requireAdmin, (_req, res) => {
+    store.clearPrices();
+    items.resetCache();
+    res.json({ status: prices.priceStatus() });
   });
 
   app.patch('/api/admin/upgrade/settings', requireAdmin, (req, res) => {
