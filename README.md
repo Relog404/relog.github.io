@@ -36,20 +36,24 @@ panel/             сайт на Node.js: RCON-панель, каталог, м�
 
 ## Быстрый старт
 
-**1. Сервер (Windows) — всё в один клик:**
+**1. Сервер (Windows) — один файл, двойной клик:**
 
 ```bat
-cd cs2-server
-install-all.bat C:\cs2-server
+cs2-server\CS2.bat
 ```
 
-Само скачается: SteamCMD → CS2 (app 730) → Metamod:Source → CounterStrikeSharp →
-**уже собранный** плагин PanelSkins (DLL лежит в репозитории, .NET не нужен).
-Останется только прописать адрес панели и ключ в
-`game\csgo\addons\counterstrikesharp\plugins\PanelSkins\PanelSkins.json`.
+`CS2.bat` делает всё сам: проверяет место на диске → качает SteamCMD → качает CS2
+(app 730) → ставит Metamod:Source и CounterStrikeSharp → правит `gameinfo.gi` →
+кладёт **уже собранный** плагин PanelSkins → пишет `server.cfg` с RCON-паролем →
+поднимает веб-панель (если стоит Node.js) → **запускает сервер** с `-insecure`
+(без этого флага плагины не грузятся). Упал — перезапустит сам.
 
-Отдельными шагами, если нужно: `install-cs2-server.bat` (только игра) и
-`install-plugins.bat` (только плагины).
+Путь к серверу запоминается в `cs2-path.txt`; если на диске по умолчанию мало
+места — батник сам выберет диск, где места хватает, и напишет куда поставил.
+Можно и вручную: `CS2.bat E:\cs2-server МойПароль GSLT_ТОКЕН`.
+
+Отдельными шагами: `install-cs2-server.bat` (только игра), `install-plugins.bat`
+(только плагины), `panel\start-windows.bat` (только сайт).
 
 **2. Сайт:**
 
