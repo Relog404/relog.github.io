@@ -19,3 +19,6 @@ Thumbs.db
 # сборки плагинов (бинарники не коммитим)
 cs2-server/plugins/*/bin/
 cs2-server/plugins/*/obj/
+
+# лог сборки плагина из CI
+cs2-server/plugins/*/build.log

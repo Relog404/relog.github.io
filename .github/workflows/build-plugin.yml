@@ -66,14 +66,31 @@ jobs:
           echo "refs=" >> "$GITHUB_OUTPUT"
 
       - name: Собрать плагин
+        id: build
+        run: |
+          set -uo pipefail
+          cd cs2-server/plugins/PanelSkins
+          rm -f build.log
+          if [ -n "${{ steps.css.outputs.refs }}" ]; then
+            echo "== сборка по DLL из релиза CSSharp ==" | tee -a build.log
+            dotnet build -c Release -p:CSSharpRefs="${{ steps.css.outputs.refs }}" 2>&1 | tee -a build.log
+            if [ -f bin/Release/net8.0/PanelSkins.dll ]; then exit ${PIPESTATUS[0]}; fi
+          fi
+          echo "== сборка из NuGet ==" | tee -a build.log
+          dotnet build -c Release 2>&1 | tee -a build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Сохранить лог сборки в репозиторий
+        if: failure()
         run: |
           set -euo pipefail
-          cd cs2-server/plugins/PanelSkins
-          if [ -n "${{ steps.css.outputs.refs }}" ]; then
-            dotnet build -c Release -p:CSSharpRefs="${{ steps.css.outputs.refs }}"
-          else
-            dotnet build -c Release
-          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin "${GITHUB_REF_NAME}" || true
+          cp cs2-server/plugins/PanelSkins/build.log cs2-server/plugins/PanelSkins/build.log 2>/dev/null || true
+          git add cs2-server/plugins/PanelSkins/build.log
+          git diff --cached --quiet || git commit -m "ci: лог неудачной сборки плагина [skip ci]"
+          git push
 
       - name: Сложить готовые файлы
         run: |
