@@ -36,11 +36,19 @@ export const defaultServerFromEnv = () => {
   };
 };
 
+/** Порт панели. PANEL_PORT — свой; PORT наследуется из окружения,
+ *  поэтому порт игрового сервера (27015) отбрасываем. */
+let panelPort = Number(env.PANEL_PORT || env.PORT || 3000);
+if (!env.PANEL_PORT && panelPort === Number(env.CS2_GAME_PORT || 27015)) {
+  console.warn(`[panel] порт ${panelPort} — это порт игрового сервера, поднимаюсь на 3000. Задайте PANEL_PORT, если так и надо.`);
+  panelPort = 3000;
+}
+
 export const config = {
-  port: Number(env.PORT || 3000),
+  port: panelPort,
   host: env.HOST || '0.0.0.0',
   /** Публичный адрес панели — нужен для Steam OpenID (realm/return_to). */
-  baseUrl: env.PUBLIC_BASE_URL || `http://localhost:${Number(env.PORT || 3000)}`,
+  baseUrl: env.PUBLIC_BASE_URL || `http://localhost:${panelPort}`,
   sessionSecret: env.SESSION_SECRET || 'dev-only-secret-change-me',
   sessionTtlDays: Number(env.SESSION_TTL_DAYS || 30),
   steamApiKey: env.STEAM_API_KEY || '',

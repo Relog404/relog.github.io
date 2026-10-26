@@ -64,6 +64,10 @@ echo.
 rem тот же ключ, что использует игровой плагин (его создаёт CS2.bat)
 if exist "%~dp0plugin-key.txt" set /p PLUGIN_API_KEY=<"%~dp0plugin-key.txt"
 
+rem порт панели фиксируем сами: в окружении может быть PORT от игрового сервера
+set "PANEL_PORT=3000"
+set "PORT=3000"
+
 call npm start
 
 echo.

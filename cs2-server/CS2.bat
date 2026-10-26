@@ -476,7 +476,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo        панель молчит - поднимаю её в отдельном окне
-start "CS2 панель" /D "%PANEL_DIR%" cmd /c "set PLUGIN_API_KEY=%PLUGIN_KEY%&& npm install --no-audit --no-fund && npm start"
+start "CS2 панель" /D "%PANEL_DIR%" cmd /c "set PANEL_PORT=3000&& set PORT=3000&& set PLUGIN_API_KEY=%PLUGIN_KEY%&& npm install --no-audit --no-fund && npm start"
 set "WAITED=0"
 
 :panel_wait
@@ -490,6 +490,15 @@ if "%PANEL_OK%"=="200" (
     exit /b 0
 )
 if %WAITED% LSS 60 goto panel_wait
+rem  Если панель унаследовала PORT игрового сервера, она сядет на 27015
+set "PANEL_OK=0"
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:27015/api/health' -TimeoutSec 3 -UseBasicParsing; $r.StatusCode } catch { 0 }" 2^>nul`) do set "PANEL_OK=%%A"
+if "%PANEL_OK%"=="200" (
+    echo.
+    echo   ВНИМАНИЕ: панель сидит на порте 27015 - это порт игрового сервера.
+    echo   Закройте окно "CS2 панель" и запустите CS2.bat заново.
+    echo.
+)
 echo        панель не поднялась за %WAITED% секунд - скины не выдадутся
 exit /b 1
 
