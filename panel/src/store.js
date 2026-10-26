@@ -12,6 +12,7 @@ const emptyStore = () => ({
   profiles: {}, // { [steamId]: { name, avatar, updatedAt } } — кэш Steam-профилей
   economy: {}, // { [steamId]: { coins, items, seeds, stats, ... } } — виртуальные монеты и хранилище
   history: [], // последние розыгрыши апгрейда
+  settings: null, // настройки сайта (шансы апгрейда и т.п.), заполняются лениво
   customItems: [], // предметы, добавленные админом через админку
   catalogOverrides: {}, // { [itemId]: { price?, hidden? } }
 });
@@ -299,4 +300,77 @@ export function pushHistory(entry, limit = 200) {
 
 export function getHistory(limit = 20) {
   return (load().history || []).slice(0, limit);
+}
+
+
+/* --------------------------- настройки сайта ---------------------------- */
+
+/**
+ * Множители апгрейда и «базовые шансы» для каждого из них.
+ * multiplier = во сколько раз цель дороже ставки.
+ * edge = доля от честного шанса: chance = (ставка / цена цели) * edge.
+ */
+const clamp01 = (value) => Math.min(1, Math.max(0.1, Number(value) || 0.95));
+
+export function defaultUpgradeSettings() {
+  const g = clamp01(config.upgradeEdge);
+  return {
+    multipliers: [2, 4, 8, 10, 25, 50],
+    // чем больше множитель, тем меньше доля от «честного» шанса
+    edgeByMultiplier: {
+      2: Number(Math.min(1, g * 1.03).toFixed(4)),
+      4: Number(g.toFixed(4)),
+      8: Number((g * 0.97).toFixed(4)),
+      10: Number((g * 0.95).toFixed(4)),
+      25: Number((g * 0.9).toFixed(4)),
+      50: Number((g * 0.85).toFixed(4)),
+    },
+    globalEdge: g,
+    minChance: 0.01,
+    maxChance: 0.95,
+  };
+}
+
+export function getUpgradeSettings() {
+  const store = load();
+  if (!store.settings) store.settings = {};
+  if (!store.settings.upgrade) {
+    store.settings.upgrade = defaultUpgradeSettings();
+    save();
+  }
+  const upgrade = store.settings.upgrade;
+  return {
+    ...defaultUpgradeSettings(),
+    ...upgrade,
+    edgeByMultiplier: { ...defaultUpgradeSettings().edgeByMultiplier, ...(upgrade.edgeByMultiplier || {}) },
+  };
+}
+
+export function patchUpgradeSettings(patch) {
+  const store = load();
+  store.settings = store.settings || {};
+  const current = getUpgradeSettings();
+
+  const next = { ...current };
+  if (Array.isArray(patch.multipliers)) {
+    next.multipliers = [...new Set(patch.multipliers.map((m) => Math.max(1, Math.round(Number(m) || 1))))]
+      .sort((a, b) => a - b)
+      .slice(0, 20);
+  }
+  if (patch.edgeByMultiplier && typeof patch.edgeByMultiplier === 'object') {
+    const edges = { ...next.edgeByMultiplier };
+    for (const [key, value] of Object.entries(patch.edgeByMultiplier)) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric) && numeric > 0 && numeric <= 1) edges[String(key)] = numeric;
+    }
+    next.edgeByMultiplier = edges;
+  }
+  if (patch.globalEdge !== undefined) {
+    const numeric = Number(patch.globalEdge);
+    if (Number.isFinite(numeric) && numeric > 0 && numeric <= 1) next.globalEdge = numeric;
+  }
+
+  store.settings.upgrade = next;
+  save();
+  return next;
 }

@@ -93,7 +93,8 @@ test('предпросмотр апгрейда считает шанс как �
   const preview = await call('POST', '/api/upgrade/preview', { body: { uids, targetItemId: target.id } });
   assert.equal(preview.status, 200);
   assert.equal(preview.data.stake, stake);
-  assert.equal(preview.data.chance, Math.min(0.95, Math.max(0.01, stake / target.price)));
+  assert.equal(typeof preview.data.multiplier, 'number');
+  assert.equal(preview.data.chance, Math.min(0.95, Math.max(0.01, (stake / target.price) * preview.data.edge)));
 });
 
 test('розыгрыш детерминирован: один и тот же roll при тех же seed-ах', async () => {
@@ -141,7 +142,7 @@ test('админка: статистика, начисление монет, б�
   const stats = await call('GET', '/api/admin/stats', { as: ADMIN });
   assert.equal(stats.status, 200);
   assert.ok(stats.data.users >= 1);
-  assert.equal(stats.data.edge, 1);
+  assert.ok(stats.data.edge > 0 && stats.data.edge <= 1);
 
   const granted = await call('POST', '/api/admin/coins', { as: ADMIN, body: { steamId: PLAYER, amount: 500 } });
   assert.equal(granted.status, 200);

@@ -60,6 +60,8 @@ export function createApp() {
       allowServerManagement: config.allowServerManagement,
       baseUrl: config.baseUrl,
       economy: economy.settings(),
+      // Игровой сервер не обязателен: сайт, магазин и апгрейд работают без него.
+      serverBound: store.listServers().some((s) => !s.demo && s.hasPassword),
     });
   });
 
@@ -315,6 +317,19 @@ export function createApp() {
     res.json(economy.rotateSeed(req.user.steamId));
   }));
 
+  /** Публичные настройки апгрейда: множители и шансы. */
+  app.get('/api/upgrade/settings', (_req, res) => {
+    res.json(economy.settings());
+  });
+
+  /** Подобрать цель под множитель: ?stake=1000&multiplier=10 */
+  app.get('/api/upgrade/suggestions', (req, res) => {
+    const stake = Number(req.query.stake) || 0;
+    const multiplier = Number(req.query.multiplier) || 2;
+    if (stake <= 0) return res.json({ items: [], target: 0 });
+    res.json({ stake, multiplier, target: Math.round(stake * multiplier), items: economy.suggestTargets(stake, multiplier) });
+  });
+
   app.post('/api/upgrade/preview', requireAuth, economyRoute((req, res) => {
     res.json(economy.previewUpgrade(req.user.steamId, req.body?.uids || [], req.body?.targetItemId));
   }));
@@ -416,6 +431,10 @@ export function createApp() {
 
   app.get('/api/admin/history', requireAdmin, (_req, res) => {
     res.json({ history: store.getHistory(50) });
+  });
+
+  app.patch('/api/admin/upgrade/settings', requireAdmin, (req, res) => {
+    res.json({ upgrade: store.patchUpgradeSettings(req.body || {}) });
   });
 
   app.get('/api/admin/items', requireAdmin, (_req, res) => {

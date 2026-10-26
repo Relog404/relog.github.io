@@ -63,6 +63,8 @@
 
         <div class="block upgrade-right">
           <h2>Цель апгрейда</h2>
+          <div class="multipliers" id="multiplierRow"></div>
+          <p class="muted small" id="targetMode">Выберите множитель, чтобы подобрать цель под ставку, или ищите вручную ниже.</p>
           <div class="filters">
             <input id="targetQuery" type="search" placeholder="Поиск цели: Karambit, медаль, AWP…" />
             <select id="targetCategory"><option value="">Все категории</option></select>
@@ -218,6 +220,10 @@
     <!-- ------------------------------ СЕРВЕР ------------------------------ -->
     <section class="panel" id="tab-server">
       <div id="statusPill" class="pill pill-warn">загрузка…</div>
+      <p class="notice" id="serverBindHint">
+        Привязка игрового сервера <b>не обязательна</b>: сайт, магазин и апгрейд-рулетка работают и без него.
+        Сервер нужен только чтобы плагин забирал надетые скины и показывал их в игре.
+      </p>
       <div class="cards" id="infoCards"></div>
 
       <div class="grid-2">
@@ -322,6 +328,22 @@
 
           <h2>Правки каталога</h2>
           <div class="loadouts" id="adminItems"></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <h2>Базовые шансы апгрейда</h2>
+        <p class="muted small">
+          Множитель — во сколько раз цель дороже ставки. Шанс считается как
+          <code>(ставка / цена цели) × коэффициент</code>. Меньше коэффициент — ниже шанс, больше маржа.
+          Пресеты ×2…×50 показываются игрокам на вкладке «Апгрейд».
+        </p>
+        <div class="chance-editor" id="chanceEditor"></div>
+        <div class="row">
+          <label class="row-label">Общий коэффициент
+            <input type="number" step="0.01" min="0.1" max="1" id="globalEdge">
+          </label>
+          <button class="btn" id="saveChances">Сохранить шансы</button>
         </div>
       </div>
 

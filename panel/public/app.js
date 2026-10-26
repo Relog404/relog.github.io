@@ -15,6 +15,8 @@ const state = {
   chance: 0,
   spinning: false,
   equip: null,
+  multiplier: null,
+  chances: null,
 };
 
 const CELL_W = 132;
@@ -67,6 +69,12 @@ const CATEGORY_ICON = {
   'Медали': '🏅', 'Значки': '📌', 'Кейсы': '📦', 'Музыка': '🎵', 'Патчи': '🧩', 'Агенты': '🕵️',
 };
 
+function itemArt(item, icon) {
+  return item.image
+    ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy" onerror="this.classList.add('broken')"><span class="fallback">${icon}</span>`
+    : `<span class="fallback show">${icon}</span>`;
+}
+
 function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {}) {
   const icon = CATEGORY_ICON[item.category] || '🎁';
   const footer = {
@@ -76,7 +84,7 @@ function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {
   }[mode];
 
   return `<div class="skin ${selected ? 'selected' : ''} ${inDraft ? 'in-draft' : ''}" data-rarity="${escapeHtml(item.rarity)}" data-id="${escapeHtml(item.id)}">
-    <div class="skin-art"><span>${icon}</span></div>
+    <div class="skin-art">${itemArt(item, icon)}</div>
     <div class="weapon">${escapeHtml(item.weapon)} · ${escapeHtml(item.category)}</div>
     <div class="pattern">${escapeHtml(item.pattern)}</div>
     <div class="meta"><span class="rarity">${escapeHtml(item.rarity)}</span><span>${item.float ? `износ ${item.float[0]}–${item.float[1]}` : ''}</span></div>
@@ -124,6 +132,13 @@ function renderAuth() {
 
 async function loadConfig() {
   state.config = await api('/api/config');
+  const hint = $('#serverBindHint');
+  if (hint) {
+    hint.classList.toggle('notice-ok', state.config.serverBound === true);
+    hint.innerHTML = state.config.serverBound
+      ? 'Игровой сервер <b>привязан</b>: плагин забирает надетые скины и показывает их в игре.'
+      : 'Привязка игрового сервера <b>не обязательна</b>: сайт, магазин и апгрейд-рулетка работают и без него. Сервер нужен только чтобы плагин забирал надетые скины.';
+  }
   const economy = state.config.economy || {};
   const rows = [
     ['Режим демо', state.config.demoMode ? 'включён' : 'выключен'],
@@ -364,25 +379,11 @@ async function loadTargets() {
     pageSize: '12',
   });
   const data = await api(`/api/catalog?${params.toString()}`);
-  $('#targetGrid').innerHTML = data.items
-    .map((item) => itemCard(item, { mode: 'target', selected: state.target?.id === item.id }))
-    .join('') || '<p class="empty">Ничего не найдено</p>';
+  renderItems(data.items, { mode: 'target' });
 
   $('#targetPageLabel').textContent = `страница ${data.page} из ${data.pages}`;
   $('#targetPrev').disabled = data.page <= 1;
   $('#targetNext').disabled = data.page >= data.pages;
-
-  $$('[data-target]').forEach((btn) => {
-    btn.onclick = async (event) => {
-      event.stopPropagation();
-      const { items } = await api(`/api/catalog?query=${encodeURIComponent(btn.dataset.target)}&pageSize=1`);
-      const found = items.find((i) => i.id === btn.dataset.target);
-      if (!found) return toast('Предмет не найден', 'err');
-      state.target = found;
-      loadTargets();
-      updateChance();
-    };
-  });
 }
 
 async function updateChance() {
@@ -420,7 +421,8 @@ async function updateChance() {
     fill.style.width = `${Math.min(100, percent)}%`;
     $('#chanceText').textContent = `${percent.toFixed(percent < 10 ? 2 : 1)}%`;
     const lossNote = data.stake > data.payout ? ' <span class="warn">ставка дороже цели</span>' : '';
-    summary.innerHTML = `Ставка <b>${coins(data.stake)}</b> → цель <b>${escapeHtml(data.target.pattern)}</b> (${coins(data.payout)})${lossNote}`;
+    const multNote = data.multiplier && data.multiplier >= 2 ? ` <span class="badge">×${Number(data.multiplier.toFixed(1))}</span>` : '';
+    summary.innerHTML = `Ставка <b>${coins(data.stake)}</b> → цель <b>${escapeHtml(data.target.pattern)}</b> (${coins(data.payout)})${multNote}${lossNote}`;
     spin.disabled = state.spinning || data.stake <= 0;
   } catch (error) {
     state.chance = rough / 100;
@@ -436,7 +438,7 @@ function buildReel(cells, winIndex, loops = 3) {
   for (let l = 0; l < loops + 1; l += 1) strip.push(...cells);
   track.innerHTML = strip
     .map((cell) => `<div class="reel-cell ${cell.isWin ? 'win' : ''}" data-rarity="${escapeHtml(cell.rarity)}">
-        <div class="reel-art">${CATEGORY_ICON[cell.category] || '🎁'}</div>
+        <div class="reel-art">${itemArt(cell, CATEGORY_ICON[cell.category] || '🎁')}</div>
         <div class="reel-name">${escapeHtml(cell.pattern)}</div>
         <div class="reel-price">${coins(cell.price)}</div>
       </div>`)
@@ -510,7 +512,7 @@ async function loadHistory() {
       ? history
           .map((h) => `<div class="hist-row ${h.win ? 'win' : 'lose'}">
               <span class="mono">${new Date(h.at).toLocaleTimeString('ru-RU')}</span>
-              <span class="hist-name">${CATEGORY_ICON[h.target.category] || '🎁'} ${escapeHtml(h.target.pattern)}</span>
+              <span class="hist-name">${h.target.image ? `<img class="hist-img" src="${escapeHtml(h.target.image)}" alt="" loading="lazy">` : CATEGORY_ICON[h.target.category] || '🎁'} ${escapeHtml(h.target.pattern)}</span>
               <span class="muted">${(h.chance * 100).toFixed(1)}%</span>
               <span>${coins(h.stake)} → ${h.win ? coins(h.payout) : '0'}</span>
               <span class="hist-badge">${h.win ? 'WIN' : 'LOSE'}</span>
@@ -520,6 +522,88 @@ async function loadHistory() {
   } catch {
     $('#historyFeed').innerHTML = '';
   }
+}
+
+/* --------------------------- пресеты множителей ------------------------- */
+
+async function loadChances() {
+  try {
+    const data = await api('/api/upgrade/settings');
+    state.chances = data;
+    renderMultipliers();
+    renderChanceEditor();
+  } catch {
+    state.chances = null;
+  }
+}
+
+function currentStake() {
+  return (state.econ?.items || [])
+    .filter((i) => state.selection.includes(i.uid))
+    .reduce((sum, i) => sum + i.price, 0);
+}
+
+function renderMultipliers() {
+  const row = $('#multiplierRow');
+  const chances = state.chances?.chances || [];
+  if (!chances.length) {
+    row.innerHTML = '';
+    return;
+  }
+  row.innerHTML = chances
+    .map(
+      (c) => `<button class="mult ${state.multiplier === c.multiplier ? 'active' : ''}" data-mult="${c.multiplier}">
+          <span class="mult-x">×${c.multiplier}</span>
+          <span class="mult-chance">${(c.chance * 100).toFixed(c.chance < 0.1 ? 2 : 1)}%</span>
+        </button>`
+    )
+    .join('');
+
+  $$('[data-mult]').forEach((btn) => {
+    btn.onclick = async () => {
+      const multiplier = Number(btn.dataset.mult);
+      state.multiplier = state.multiplier === multiplier ? null : multiplier;
+      renderMultipliers();
+      if (!state.multiplier) {
+        $('#targetMode').textContent = 'Выберите множитель, чтобы подобрать цель под ставку, или ищите вручную ниже.';
+        return loadTargets();
+      }
+      const stake = currentStake();
+      if (stake <= 0) {
+        $('#targetMode').textContent = 'Поставьте предметы слева — тогда подберём цель под множитель.';
+        return;
+      }
+      try {
+        const data = await api(`/api/upgrade/suggestions?stake=${stake}&multiplier=${state.multiplier}`);
+        $('#targetMode').textContent = `Подобрано под ×${state.multiplier}: цель примерно за ${data.target} 🪙`;
+        renderItems(data.items, { mode: 'target' });
+      } catch (error) {
+        toast(error.message, 'err');
+      }
+    };
+  });
+}
+
+/** Рисует список предметов в сетке цели (общий код для поиска и подбора). */
+function renderItems(list, { mode = 'target' } = {}) {
+  $('#targetGrid').innerHTML = list.length
+    ? list.map((item) => itemCard(item, { mode, selected: state.target?.id === item.id })).join('')
+    : '<p class="empty">Ничего не найдено</p>';
+  bindTargetButtons();
+}
+
+function bindTargetButtons() {
+  $$('#targetGrid [data-target]').forEach((btn) => {
+    btn.onclick = async (event) => {
+      event.stopPropagation();
+      const { items } = await api(`/api/catalog?query=${encodeURIComponent(btn.dataset.target)}&pageSize=1`);
+      const found = items.find((i) => i.id === btn.dataset.target);
+      if (!found) return toast('Предмет не найден', 'err');
+      state.target = found;
+      loadTargets();
+      updateChance();
+    };
+  });
 }
 
 /* ------------------------------- экипировка ----------------------------- */
@@ -898,6 +982,12 @@ async function loadAdmin() {
   }
 
   try {
+    renderChanceEditor();
+  } catch {
+    /* настройки могли не загрузиться — не критично */
+  }
+
+  try {
     const { custom, overrides } = await api('/api/admin/items');
     const rows = [
       ...custom.map((i) => ({ id: i.id, label: `${i.weapon} — ${i.pattern}`, price: i.price, kind: 'свой' })),
@@ -944,6 +1034,54 @@ async function loadAdmin() {
   } catch {
     $('#adminHistory tbody').innerHTML = '';
   }
+}
+
+/* ------------------------- редактор шансов (админ) ---------------------- */
+
+function renderChanceEditor() {
+  const box = $('#chanceEditor');
+  if (!box || !state.chances) return;
+
+  box.innerHTML = state.chances.chances
+    .map(
+      (c) => `<label class="chance-row-item">
+          <span class="chance-x">×${c.multiplier}</span>
+          <input type="number" step="0.01" min="0.1" max="1" value="${c.edge}" data-edge="${c.multiplier}">
+          <span class="muted small">шанс ${(c.chance * 100).toFixed(c.chance < 0.1 ? 2 : 1)}%</span>
+        </label>`
+    )
+    .join('');
+  $('#globalEdge').value = state.chances.edge;
+}
+
+async function saveChances() {
+  const edgeByMultiplier = {};
+  $$('[data-edge]').forEach((input) => {
+    edgeByMultiplier[input.dataset.edge] = Number(input.value);
+  });
+  try {
+    const data = await api('/api/admin/upgrade/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ edgeByMultiplier, globalEdge: Number($('#globalEdge').value) }),
+    });
+    state.chances = { ...state.chances, ...data.upgrade };
+    state.config.economy = { ...state.config.economy, ...economyFromSettings(data.upgrade) };
+    renderChanceEditor();
+    renderMultipliers();
+    toast('Шансы обновлены', 'ok');
+  } catch (error) {
+    toast(error.message, 'err');
+  }
+}
+
+function economyFromSettings(upgrade) {
+  return {
+    multipliers: upgrade.multipliers,
+    chances: upgrade.multipliers.map((multiplier) => {
+      const edge = upgrade.edgeByMultiplier[String(multiplier)] ?? upgrade.globalEdge;
+      return { multiplier, edge, chance: Math.min(0.95, Math.max(0.01, (1 / multiplier) * edge)) };
+    }),
+  };
 }
 
 /* ---------------------------------- UI ---------------------------------- */
@@ -1030,6 +1168,9 @@ function bindUi() {
     updateChance();
   };
 
+  const saveChancesBtn = $('#saveChances');
+  if (saveChancesBtn) saveChancesBtn.onclick = saveChances;
+
   $('#saveLoadout').onclick = async () => {
     if (!state.user) return toast('Сначала войдите через Steam', 'err');
     const name = $('#loadoutName').value.trim() || 'Моя сборка';
@@ -1104,6 +1245,7 @@ function bindUi() {
     await loadCatalog();
     await loadEconomy();
     await loadEquip();
+    await loadChances();
     await loadTargets();
     await loadHistory();
     await loadServers();

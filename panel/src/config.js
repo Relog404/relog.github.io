@@ -47,6 +47,9 @@ export const config = {
   adminSteamIds: list(env.ADMIN_STEAM_IDS),
   /** Разрешать ли менять список серверов из панели (иначе только сервер из env). */
   allowServerManagement: bool(env.ALLOW_SERVER_MANAGEMENT, true),
+  /** Базовый коэффициент апгрейда по умолчанию (шанс = ставка / цена цели * edge). */
+  upgradeEdge: Math.min(Math.max(Number(env.UPGRADE_EDGE || 0.95), 0.1), 1),
+
   /** Общий ключ для игровых плагинов (альтернатива ключу конкретного сервера). */
   pluginApiKey: env.PLUGIN_API_KEY || '',
   dataDir: env.DATA_DIR || path.join(ROOT, 'data'),

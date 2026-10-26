@@ -15,8 +15,26 @@ const { findItem, findSlot, itemFitsSlot, slotIndex } = items;
 const START_COINS = Number(process.env.START_COINS || 1000);
 const DAILY_COINS = Number(process.env.DAILY_COINS || 250);
 const DAILY_COOLDOWN_MS = Number(process.env.DAILY_COOLDOWN_HOURS || 20) * 3600 * 1000;
-/** Доля «в пользу дома»: шанс = ставка / цена цели * EDGE. */
-const EDGE = Math.min(Math.max(Number(process.env.UPGRADE_EDGE || 0.95), 0.1), 1);
+/** Доля «в пользу дома» по умолчанию: шанс = ставка / цена цели * edge. */
+const DEFAULT_EDGE = config.upgradeEdge;
+
+/**
+ * Коэффициент для конкретного множителя (во сколько цель дороже ставки).
+ * Даёт админу крутить «базовые шансы»: x2 — щедрее, x50 — скромнее.
+ */
+function edgeForMultiplier(multiplier) {
+  const settings = store.getUpgradeSettings();
+  if (!Number.isFinite(multiplier) || multiplier <= 1) return settings.globalEdge ?? DEFAULT_EDGE;
+  const bucket = [...settings.multipliers].sort((a, b) => b - a).find((m) => multiplier >= m);
+  const value = bucket !== undefined ? settings.edgeByMultiplier[String(bucket)] : undefined;
+  return Number.isFinite(value) ? value : (settings.globalEdge ?? DEFAULT_EDGE);
+}
+
+/** Множитель цели: во сколько раз цель дороже ставки. */
+export function targetMultiplier(stake, targetPrice) {
+  if (!stake || !targetPrice) return 0;
+  return Number((targetPrice / stake).toFixed(3));
+}
 const MIN_CHANCE = 0.01;
 const MAX_CHANCE = 0.95;
 /** Сколько монет возвращается при продаже предмета обратно в магазин. */
@@ -39,14 +57,35 @@ function newSeeds() {
 
 /** Публичные настройки экономики — их видит и фронтенд. */
 export function settings() {
+  const upgrade = store.getUpgradeSettings();
   return {
     realMoney: false,          // депозитов и вывода реальных вещей нет и не будет
     startCoins: START_COINS,
     dailyCoins: DAILY_COINS,
-    edge: EDGE,
+    edge: upgrade.globalEdge ?? DEFAULT_EDGE,
     sellRate: SELL_RATE,
     reelCells: REEL_CELLS,
+    // Апгрейд работает и без привязанного игрового сервера: сервер нужен
+    // только для синхронизации скинов в саму игру.
+    serverRequired: false,
+    multipliers: upgrade.multipliers,
+    chances: upgrade.multipliers.map((multiplier) => ({
+      multiplier,
+      edge: edgeForMultiplier(multiplier),
+      chance: Math.min(MAX_CHANCE, Math.max(MIN_CHANCE, (1 / multiplier) * edgeForMultiplier(multiplier))),
+    })),
   };
+}
+
+/** Подбор целей под множитель: цена цели ≈ ставка × multiplier. */
+export function suggestTargets(stake, multiplier, limit = 12) {
+  const target = Math.max(1, Number(stake) || 0) * Math.max(1, Number(multiplier) || 2);
+  const pool = items
+    .loadItems()
+    .filter((item) => item.price >= target * 0.7 && item.price <= target * 1.3)
+    .sort((a, b) => Math.abs(a.price - target) - Math.abs(b.price - target));
+  const list = pool.length ? pool : items.loadItems().filter((i) => i.price >= target * 0.5).sort((a, b) => a.price - b.price);
+  return list.slice(0, limit);
 }
 
 export function stateFor(steamId) {
@@ -161,9 +200,19 @@ export function previewUpgrade(steamId, uids, targetItemId) {
   }
 
   const stake = chosen.reduce((sum, i) => sum + i.price, 0);
-  const rawChance = (stake / target.price) * EDGE;
+  const multiplier = targetMultiplier(stake, target.price);
+  const edge = edgeForMultiplier(multiplier);
+  const rawChance = (stake / target.price) * edge;
   const chance = Math.min(MAX_CHANCE, Math.max(MIN_CHANCE, rawChance));
-  return { stake, target, chance, edge: EDGE, payout: target.price, profit: target.price - stake };
+  return {
+    stake,
+    target,
+    multiplier,
+    edge,
+    chance,
+    payout: target.price,
+    profit: target.price - stake,
+  };
 }
 
 export function playUpgrade(steamId, uids, targetItemId) {
@@ -205,7 +254,16 @@ export function playUpgrade(steamId, uids, targetItemId) {
     chance: preview.chance,
     roll,
     win,
-    target: { id: preview.target.id, weapon: preview.target.weapon, pattern: preview.target.pattern, category: preview.target.category, rarity: preview.target.rarity },
+    target: {
+      id: preview.target.id,
+      weapon: preview.target.weapon,
+      pattern: preview.target.pattern,
+      category: preview.target.category,
+      rarity: preview.target.rarity,
+      image: preview.target.image || '',
+    },
+    multiplier: preview.multiplier,
+    edge: preview.edge,
     consumed: consumed.length,
     fair: { serverSeedHash: econ.serverSeedHash, clientSeed: econ.clientSeed, nonce },
   };
@@ -248,7 +306,7 @@ export function globalStats() {
     wagered,
     paid,
     rtp: wagered > 0 ? Number((paid / wagered).toFixed(3)) : 0,
-    edge: EDGE,
+    edge: store.getUpgradeSettings().globalEdge ?? DEFAULT_EDGE,
     startCoins: START_COINS,
     dailyCoins: DAILY_COINS,
     sellRate: SELL_RATE,
