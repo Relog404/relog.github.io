@@ -15,6 +15,25 @@ chcp 65001 >nul 2>&1
 setlocal EnableExtensions EnableDelayedExpansion
 title CS2 сервер + скинченджер
 
+rem  файл должен быть с CRLF: с LF cmd ломается на блоках и закрывается сам.
+rem  Проверка однострочная, чтобы сработала даже в таком битом файле.
+set "EOL_CHECK="
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "$b=[IO.File]::ReadAllBytes('%~f0'); $crlf=0; $lf=0; for($i=0;$i -lt $b.Length;$i++){ if($b[$i] -eq 10){ if($i -gt 0 -and $b[$i-1] -eq 13){$crlf++} else {$lf++} } }; if($lf -gt $crlf){ 'LF' } else { 'CRLF' }"`) do set "EOL_CHECK=%%A"
+if "%EOL_CHECK%"=="LF" echo.
+if "%EOL_CHECK%"=="LF" echo   ВНИМАНИЕ: CS2.bat сохранён с переводами строк LF - cmd закрывается сам.
+if "%EOL_CHECK%"=="LF" echo   Пересохраняю этот файл с CRLF и запускаю заново...
+if "%EOL_CHECK%"=="LF" powershell -NoProfile -Command "$p='%~f0'; $t=[IO.File]::ReadAllText($p); [IO.File]::WriteAllText($p,($t -replace "`r?`n","`r`n"),(New-Object System.Text.UTF8Encoding($false)))"
+if "%EOL_CHECK%"=="LF" start "" "%~f0" %*
+if "%EOL_CHECK%"=="LF" exit /b
+
+rem  весь вывод этого файла дублируем в cs2-bat.log: окно может закрыться,
+rem  а причина должна остаться на диске
+if not defined CS2BAT_LOGGING (
+    set "CS2BAT_LOGGING=1"
+    "%~f0" %* 2>&1 | powershell -NoProfile -Command "$sw=[IO.File]::AppendText('%~dp0cs2-bat.log'); $sw.AutoFlush=$true; try { $input | ForEach-Object { Write-Output $_; $sw.WriteLine($_) } } finally { $sw.Close() }"
+    exit /b
+)
+
 rem ------------------------- НАСТРОЙКИ -------------------------
 set "SCRIPT_DIR=%~dp0"
 set "PATH_FILE=%SCRIPT_DIR%cs2-path.txt"
