@@ -10,7 +10,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$CsgoDir = Join-Path $InstallDir 'game\csgo'
+# CS2 кладёт игру в <install_dir>\game\game\csgo — но проверяем и старую раскладку
+$CsgoDir = Join-Path $InstallDir 'game\game\csgo'
+if (-not (Test-Path $CsgoDir)) {
+    $alt = Join-Path $InstallDir 'game\csgo'
+    if (Test-Path $alt) { $CsgoDir = $alt }
+}
 if (-not (Test-Path $CsgoDir)) {
     Write-Host "ERROR: $CsgoDir not found. Run install-cs2-server.bat first." -ForegroundColor Red
     exit 1
@@ -112,7 +117,7 @@ if (Test-Path $gameinfo) {
             Write-Host "   не нашёл блок SearchPaths - допишите в gameinfo.gi вручную:" -ForegroundColor Yellow
             Write-Host "       Game    csgo/addons/metamod" -ForegroundColor Yellow
         } else {
-            Set-Content -Path $gameinfo -Value $new -Encoding UTF8
+            [IO.File]::WriteAllText($gameinfo, $new, (New-Object System.Text.UTF8Encoding($false)))
             Write-Host "   gameinfo.gi: добавлен путь csgo/addons/metamod (бэкап: gameinfo.gi.bak)" -ForegroundColor Green
         }
     }

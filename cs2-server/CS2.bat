@@ -156,6 +156,7 @@ goto gi_check
 echo        ставлю Metamod + CounterStrikeSharp и правлю gameinfo.gi...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install-plugins.ps1" -InstallDir "%INSTALL_DIR%"
 if errorlevel 1 echo        установщик плагинов завершился с ошибкой — текст выше
+if not exist "%CSGO_DIR%\addons\metamod" echo        ВНИМАНИЕ: папка addons\metamod так и не появилась
 
 :gi_check
 rem Metamod подключается ТОЛЬКО через gameinfo.gi — без этой строки он молчит
@@ -209,21 +210,21 @@ rem --------------------- [6/7] server.cfg -----------------------
 echo [6/7] Готовлю server.cfg...
 if not exist "%CFG_DIR%" mkdir "%CFG_DIR%"
 copy /y "%SCRIPT_DIR%cfg\server.cfg" "%CFG_DIR%\server.cfg" >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; (Get-Content $f -Raw) -replace 'changeme_rcon_password','%RCON_PASSWORD%' | Set-Content $f -Encoding utf8"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; $t=[IO.File]::ReadAllText($f) -replace 'changeme_rcon_password','%RCON_PASSWORD%'; [IO.File]::WriteAllText($f,$t,(New-Object System.Text.UTF8Encoding($false)))"
 if "%GSLT%"=="" (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; (Get-Content $f -Raw) -replace 'sv_lan 0','sv_lan 1' | Set-Content $f -Encoding utf8"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; $t=[IO.File]::ReadAllText($f) -replace 'sv_lan 0','sv_lan 1'; [IO.File]::WriteAllText($f,$t,(New-Object System.Text.UTF8Encoding($false)))"
     echo        GSLT нет — включил sv_lan 1, чтобы сервер не ругался на вход в Steam
 ) else (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; (Get-Content $f -Raw) -replace 'sv_lan 1','sv_lan 0' | Set-Content $f -Encoding utf8"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; $t=[IO.File]::ReadAllText($f) -replace 'sv_lan 1','sv_lan 0'; [IO.File]::WriteAllText($f,$t,(New-Object System.Text.UTF8Encoding($false)))"
 )
 echo        готово
 
 rem старая копия start-cs2.bat запускала сервер без -insecure — плагины молча не грузились,
 rem поэтому перезапишем её актуальной версией с нашими паролем и токеном
 copy /y "%SCRIPT_DIR%start-cs2.bat" "%INSTALL_DIR%\start-cs2.bat" >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%INSTALL_DIR%\start-cs2.bat'; (Get-Content $f -Raw) -replace 'changeme_rcon_password','%RCON_PASSWORD%' | Set-Content $f -Encoding utf8"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%INSTALL_DIR%\start-cs2.bat'; $t=[IO.File]::ReadAllText($f) -replace 'changeme_rcon_password','%RCON_PASSWORD%'; [IO.File]::WriteAllText($f,$t,(New-Object System.Text.UTF8Encoding($false)))"
 if not "%GSLT%"=="" (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%INSTALL_DIR%\start-cs2.bat'; (Get-Content $f -Raw) -replace 'set \"GSLT=\"','set \"GSLT=%GSLT%\"' | Set-Content $f -Encoding utf8"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%INSTALL_DIR%\start-cs2.bat'; $t=[IO.File]::ReadAllText($f) -replace 'set \"GSLT=\"','set \"GSLT=%GSLT%\"'; [IO.File]::WriteAllText($f,$t,(New-Object System.Text.UTF8Encoding($false)))"
 )
 echo        start-cs2.bat обновлён ^(теперь с -insecure^)
 
