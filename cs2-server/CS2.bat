@@ -156,7 +156,13 @@ goto gi_check
 echo        ставлю Metamod + CounterStrikeSharp и правлю gameinfo.gi...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install-plugins.ps1" -InstallDir "%INSTALL_DIR%"
 if errorlevel 1 echo        установщик плагинов завершился с ошибкой — текст выше
-if not exist "%CSGO_DIR%\addons\metamod" echo        ВНИМАНИЕ: папка addons\metamod так и не появилась
+if exist "%CSGO_DIR%\addons\metamod\bin\win64\server.dll" (
+    echo        metamod на месте
+) else (
+    echo        ВНИМАНИЕ: нет %CSGO_DIR%\addons\metamod\bin\win64\server.dll
+    echo        плагины не загрузятся — установите metamod вручную:
+    echo        https://github.com/alliedmodders/metamod-source/releases
+)
 
 :gi_check
 rem Metamod подключается ТОЛЬКО через gameinfo.gi — без этой строки он молчит

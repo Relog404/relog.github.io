@@ -1,16 +1,19 @@
 ﻿# =============================================================
 #  CounterStrikeSharp / Metamod:Source installer for CS2 (Windows)
-#  Run directly:  powershell -ExecutionPolicy Bypass -File install-plugins.ps1 -InstallDir C:\cs2-server
+#  Run:  powershell -ExecutionPolicy Bypass -File install-plugins.ps1 -InstallDir C:\cs2-server
 # =============================================================
 param(
     [string]$InstallDir = "$env:USERPROFILE\cs2-server",
-    [string]$MetamodUrl = $env:METAMOD_URL
+    [string]$CssUrl = '',
+    [string]$MetamodUrl = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# GitHub не отдаёт файлы по старому TLS - включаем 1.2 явно
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
-# CS2 кладёт игру в <install_dir>\game\game\csgo — но проверяем и старую раскладку
+# CS2 кладёт игру в <install_dir>\game\game\csgo - но проверяем и старую раскладку
 $CsgoDir = Join-Path $InstallDir 'game\game\csgo'
 if (-not (Test-Path $CsgoDir)) {
     $alt = Join-Path $InstallDir 'game\csgo'
@@ -20,79 +23,117 @@ if (-not (Test-Path $CsgoDir)) {
     Write-Host "ERROR: $CsgoDir not found. Run install-cs2-server.bat first." -ForegroundColor Red
     exit 1
 }
+Write-Host "Папка игры: $CsgoDir"
 
 $Tmp = Join-Path $env:TEMP ("cs2-plugins-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $Tmp -Force | Out-Null
 
+function Get-File {
+    param([string]$Url, [string]$OutFile)
+    for ($i = 1; $i -le 3; $i++) {
+        try {
+            Write-Host "   попытка $i/3"
+            Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
+            $size = (Get-Item $OutFile).Length
+            if ($size -gt 500KB) {
+                Write-Host ("   скачано " + [math]::Round($size / 1MB, 1) + " МБ")
+                return
+            }
+            Write-Host "   скачалось слишком мало ($size байт) - повторяю" -ForegroundColor Yellow
+        } catch {
+            Write-Host "   ошибка: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+        Start-Sleep -Seconds 3
+    }
+    throw "не удалось скачать $Url"
+}
+
 function Install-FromZip {
     param([string]$Url, [string]$Name)
-
+    Write-Host ""
+    Write-Host "== $Name ==" -ForegroundColor Cyan
+    Write-Host "   $Url"
     $zip = Join-Path $Tmp ($Name + '.zip')
     $dest = Join-Path $Tmp $Name
-    Write-Host "== $Name =="
-    Write-Host "   downloading $Url"
-    Invoke-WebRequest -Uri $Url -OutFile $zip
+    Get-File -Url $Url -OutFile $zip
     Expand-Archive -Force -Path $zip -DestinationPath $dest
-
     $addons = Join-Path $dest 'addons'
-    if (Test-Path $addons) {
-        $target = Join-Path $CsgoDir 'addons'
-        New-Item -ItemType Directory -Path $target -Force | Out-Null
-        Get-ChildItem -Path $addons | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination $target -Recurse -Force
-        }
-        Write-Host "   installed into $target" -ForegroundColor Green
-    } else {
-        Write-Host "   archive has no 'addons' folder - unpacked to $dest, copy it into $CsgoDir manually" -ForegroundColor Yellow
+    if (-not (Test-Path $addons)) { throw "в архиве $Name нет папки addons" }
+    $target = Join-Path $CsgoDir 'addons'
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+    Get-ChildItem -Path $addons | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination $target -Recurse -Force
+    }
+    Write-Host "   распаковано в $target" -ForegroundColor Green
+}
+
+function Test-HasDll {
+    param([string]$Dir)
+    if (-not (Test-Path $Dir)) { return $false }
+    $n = (Get-ChildItem -Path $Dir -Recurse -Filter *.dll -ErrorAction SilentlyContinue | Measure-Object).Count
+    return ($n -gt 0)
+}
+
+# версии зафиксированы: именно с ними собран PanelSkins.dll и проверен CS2 10955
+if (-not $MetamodUrl) {
+    $MetamodUrl = 'https://github.com/alliedmodders/metamod-source/releases/download/2.0.0.1483/mmsource-2.0.0-git1483-windows.zip'
+}
+if (-not $CssUrl) {
+    $CssUrl = 'https://github.com/roflmuffin/CounterStrikeSharp/releases/download/v1.0.377/counterstrikesharp-with-runtime-windows-1.0.377.zip'
+}
+
+$mmDir  = Join-Path $CsgoDir 'addons\metamod'
+$cssDir = Join-Path $CsgoDir 'addons\counterstrikesharp'
+$fail = $false
+
+# --------------------------- Metamod ----------------------------
+if (Test-HasDll $mmDir) {
+    Write-Host ""
+    Write-Host "== Metamod ==" -ForegroundColor Cyan
+    Write-Host "   уже установлен: $mmDir"
+} else {
+    try {
+        Install-FromZip -Url $MetamodUrl -Name 'metamod'
+    } catch {
+        $fail = $true
+        Write-Host ""
+        Write-Host "METAMOD НЕ УСТАНОВЛЕН: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Вручную: https://github.com/alliedmodders/metamod-source/releases" -ForegroundColor Yellow
+        Write-Host "  файл mmsource-2.0.0-git1483-windows.zip, папку addons распаковать в $CsgoDir" -ForegroundColor Yellow
     }
 }
 
 # ---------------------- CounterStrikeSharp ----------------------
-try {
-    $release = Invoke-RestMethod 'https://api.github.com/repos/roflmuffin/CounterStrikeSharp/releases/latest'
-    # сборка "with-runtime" содержит внутри .NET - ничего ставить руками не надо
-    $asset = $release.assets | Where-Object { $_.name -like '*with-runtime*windows*.zip' } | Select-Object -First 1
-    if (-not $asset) {
-        $asset = $release.assets | Where-Object { $_.name -like '*.zip' -and $_.name -match 'windows' } | Select-Object -First 1
-    }
-    if (-not $asset) { throw 'no suitable asset in the latest release' }
-
-    Write-Host "   latest CounterStrikeSharp: $($release.tag_name) -> $($asset.name)"
-    Install-FromZip -Url $asset.browser_download_url -Name 'counterstrikesharp'
-} catch {
-    Write-Host "CounterStrikeSharp install failed: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "Download it manually: https://github.com/roflmuffin/CounterStrikeSharp/releases" -ForegroundColor Yellow
-}
-
-# --------------------------- Metamod ----------------------------
-Write-Host ""
-Write-Host "== Metamod:Source ==" -ForegroundColor Cyan
-
-# сначала пробуем свежий билд ветки 2.0 (она для CS2) прямо с GitHub
-if (-not $MetamodUrl) {
+# сборка with-runtime: .NET внутри, ничего ставить руками не надо
+if (Test-HasDll $cssDir) {
+    Write-Host ""
+    Write-Host "== CounterStrikeSharp ==" -ForegroundColor Cyan
+    Write-Host "   уже установлен: $cssDir"
+} else {
     try {
-        $mmReleases = Invoke-RestMethod 'https://api.github.com/repos/alliedmodders/metamod-source/releases?per_page=50'
-        $mm = $mmReleases | Where-Object { $_.tag_name -like '2.0.*' } | Select-Object -First 1
-        $mmAsset = $mm.assets | Where-Object { $_.name -like '*windows*.zip' } | Select-Object -First 1
-        if ($mmAsset) { $MetamodUrl = $mmAsset.browser_download_url }
+        Install-FromZip -Url $CssUrl -Name 'counterstrikesharp'
     } catch {
-        Write-Host "   не удалось узнать последнюю версию Metamod: $($_.Exception.Message)" -ForegroundColor Yellow
+        $fail = $true
+        Write-Host ""
+        Write-Host "COUNTERSTRIKESHARP НЕ УСТАНОВЛЕН: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Вручную: https://github.com/roflmuffin/CounterStrikeSharp/releases" -ForegroundColor Yellow
+        Write-Host "  файл counterstrikesharp-with-runtime-windows-1.0.377.zip, папку addons распаковать в $CsgoDir" -ForegroundColor Yellow
     }
 }
 
-if (-not $MetamodUrl) {
-    # запасная прямая ссылка, если GitHub API недоступен
-    $MetamodUrl = 'https://github.com/alliedmodders/metamod-source/releases/download/2.0.0.1483/mmsource-2.0.0-git1483-windows.zip'
+# metamod подхватывает CSSharp через vdf; в архивах его иногда нет - создаём сами
+$cssVdf = Join-Path $mmDir 'counterstrikesharp.vdf'
+if ((Test-Path (Join-Path $cssDir 'bin\win64\counterstrikesharp.dll')) -and -not (Test-Path $cssVdf)) {
+    New-Item -ItemType Directory -Path $mmDir -Force | Out-Null
+    $vdfText = @'
+"Metamod Plugin"
+{
+	"alias"		"counterstrikesharp"
+	"file"		"addons/counterstrikesharp/bin/win64/counterstrikesharp"
 }
-
-try {
-    Write-Host "   $MetamodUrl"
-    Install-FromZip -Url $MetamodUrl -Name 'metamod'
-} catch {
-    Write-Host "Metamod install failed: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "Fallback: https://www.metamodsource.net/downloads.php?branch=stable" -ForegroundColor Yellow
-    Write-Host "   unpack the archive into: $CsgoDir" -ForegroundColor Yellow
-    Write-Host "   or re-run with:  install-plugins.bat -MetamodUrl <zip url>" -ForegroundColor Yellow
+'@
+    [IO.File]::WriteAllText($cssVdf, ($vdfText -replace "`n", "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "   создан $cssVdf - без него metamod не подхватит CSSharp" -ForegroundColor Green
 }
 
 # --------------------- gameinfo.gi: подключаем Metamod ---------------------
@@ -205,5 +246,31 @@ Write-Host "5) In server console:  meta list  (CounterStrikeSharp) and  css_plug
 Write-Host ""
 Write-Host "Plugins are server-side only: the server will be marked 'insecure' (VAC disabled on it) -"
 Write-Host "that is the normal, officially tolerated mode for community servers with plugins."
+
+
+# --------------------------- проверка ---------------------------
+# Metamod для CS2 - это свой server.dll, он перехватывает настоящий через GAMEBIN
+$mmDll  = Join-Path $mmDir  'bin\win64\server.dll'
+$cssDll = Join-Path $cssDir 'bin\win64\counterstrikesharp.dll'
+$cssVdf = Join-Path $mmDir  'counterstrikesharp.vdf'
+
+Write-Host ""
+Write-Host "==== Проверка ====" -ForegroundColor Cyan
+Write-Host ("  metamod bin\win64\server.dll             : " + (Test-Path $mmDll))
+Write-Host ("  css     bin\win64\counterstrikesharp.dll : " + (Test-Path $cssDll))
+Write-Host ("  metamod\counterstrikesharp.vdf           : " + (Test-Path $cssVdf))
+$giHasMm = $false
+if (Test-Path $gameinfo) { $giHasMm = ((Get-Content $gameinfo -Raw) -match 'csgo[\\/]addons[\\/]metamod') }
+Write-Host ("  gameinfo.gi путь к metamod               : " + $giHasMm)
+
+if (-not (Test-Path $mmDll)) {
+    Write-Host ""
+    Write-Host "Metamod не установлен (нет $mmDll) - плагины не загрузятся." -ForegroundColor Red
+    Write-Host "Инструкции по ручной установке - выше." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
+    exit 1
+}
+Write-Host ""
+Write-Host "Всё на месте. Запускайте сервер: $InstallDir\start-cs2.bat" -ForegroundColor Green
 
 Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
