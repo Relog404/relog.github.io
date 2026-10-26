@@ -45,9 +45,10 @@ function Install-FromZip {
 # ---------------------- CounterStrikeSharp ----------------------
 try {
     $release = Invoke-RestMethod 'https://api.github.com/repos/roflmuffin/CounterStrikeSharp/releases/latest'
-    $asset = $release.assets | Where-Object { $_.name -like '*.zip' -and $_.name -match 'windows' } | Select-Object -First 1
+    # сборка «with-runtime» содержит внутри .NET — ничего ставить руками не надо
+    $asset = $release.assets | Where-Object { $_.name -like '*with-runtime*windows*.zip' } | Select-Object -First 1
     if (-not $asset) {
-        $asset = $release.assets | Where-Object { $_.name -like '*.zip' -and $_.name -notmatch 'linux' } | Select-Object -First 1
+        $asset = $release.assets | Where-Object { $_.name -like '*.zip' -and $_.name -match 'windows' } | Select-Object -First 1
     }
     if (-not $asset) { throw 'no suitable asset in the latest release' }
 
@@ -59,19 +60,34 @@ try {
 }
 
 # --------------------------- Metamod ----------------------------
-if ($MetamodUrl) {
+Write-Host ""
+Write-Host "== Metamod:Source ==" -ForegroundColor Cyan
+
+# сначала пробуем свежий билд ветки 2.0 (она для CS2) прямо с GitHub
+if (-not $MetamodUrl) {
     try {
-        Install-FromZip -Url $MetamodUrl -Name 'metamod'
+        $mmReleases = Invoke-RestMethod 'https://api.github.com/repos/alliedmodders/metamod-source/releases?per_page=50'
+        $mm = $mmReleases | Where-Object { $_.tag_name -like '2.0.*' } | Select-Object -First 1
+        $mmAsset = $mm.assets | Where-Object { $_.name -like '*windows*.zip' } | Select-Object -First 1
+        if ($mmAsset) { $MetamodUrl = $mmAsset.browser_download_url }
     } catch {
-        Write-Host "Metamod install failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "   не удалось узнать последнюю версию Metamod: $($_.Exception.Message)" -ForegroundColor Yellow
     }
-} else {
-    Write-Host ""
-    Write-Host "== Metamod:Source ==" -ForegroundColor Cyan
-    Write-Host "   CounterStrikeSharp needs Metamod:Source, which is distributed without a stable direct link."
-    Write-Host "   1) take a build here : https://www.metamodsource.net/downloads.php?branch=stable"
-    Write-Host "   2) unpack the archive into: $CsgoDir"
-    Write-Host "   3) or re-run this script with:  set METAMOD_URL=<zip url>  before it"
+}
+
+if (-not $MetamodUrl) {
+    # запасная прямая ссылка, если GitHub API недоступен
+    $MetamodUrl = 'https://github.com/alliedmodders/metamod-source/releases/download/2.0.0.1483/mmsource-2.0.0-git1483-windows.zip'
+}
+
+try {
+    Write-Host "   $MetamodUrl"
+    Install-FromZip -Url $MetamodUrl -Name 'metamod'
+} catch {
+    Write-Host "Metamod install failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "Fallback: https://www.metamodsource.net/downloads.php?branch=stable" -ForegroundColor Yellow
+    Write-Host "   unpack the archive into: $CsgoDir" -ForegroundColor Yellow
+    Write-Host "   or re-run with:  install-plugins.bat -MetamodUrl <zip url>" -ForegroundColor Yellow
 }
 
 # --------------------------- PanelSkins ---------------------------

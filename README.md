@@ -14,7 +14,8 @@ panel/             сайт на Node.js: RCON-панель, каталог, м�
 
 | Возможность | Где |
 |---|---|
-| Автоустановка сервера CS2 через SteamCMD одним батником | `cs2-server/install-cs2-server.bat` (Windows), `.sh` (Linux) |
+| Автоустановка сервера CS2 через SteamCMD одним батником (+ Metamod, CSSharp и готовый плагин) | `cs2-server/install-all.bat` (Windows), `install-cs2-server.sh` (Linux) |
+| Плагин PanelSkins собирается сам в GitHub Actions, готовая DLL лежит в репозитории | `.github/workflows/build-plugin.yml`, `cs2-server/plugins/PanelSkins/dist/` |
 | Запуск с GSLT-токеном, competitive-конфигом, GOTV | `cs2-server/start-cs2.bat`, `cfg/server.cfg` |
 | Серверные плагины (CounterStrikeSharp + Metamod) | `cs2-server/install-plugins.bat` |
 | Веб-панель: статус, игроки, смена карты, чат, RCON-консоль | `panel/` |
@@ -35,13 +36,20 @@ panel/             сайт на Node.js: RCON-панель, каталог, м�
 
 ## Быстрый старт
 
-**1. Сервер (Windows):**
+**1. Сервер (Windows) — всё в один клик:**
 
 ```bat
 cd cs2-server
-install-cs2-server.bat C:\cs2-server
-start-cs2.bat
+install-all.bat C:\cs2-server
 ```
+
+Само скачается: SteamCMD → CS2 (app 730) → Metamod:Source → CounterStrikeSharp →
+**уже собранный** плагин PanelSkins (DLL лежит в репозитории, .NET не нужен).
+Останется только прописать адрес панели и ключ в
+`game\csgo\addons\counterstrikesharp\plugins\PanelSkins\PanelSkins.json`.
+
+Отдельными шагами, если нужно: `install-cs2-server.bat` (только игра) и
+`install-plugins.bat` (только плагины).
 
 **2. Сайт:**
 
