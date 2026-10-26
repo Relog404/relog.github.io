@@ -5,24 +5,24 @@ rem
 rem  Запуск: двойной клик
 rem    CS2.bat
 rem  или с параметрами:
-rem    CS2.bat D:\cs2-server MyRconPass123 GSLTТОКЕН
+rem    CS2.bat E:\cs2-server MyRconPass123 GSLTТОКЕН
 rem
-rem  Что делает:
-rem    1) проверяет место на диске
-rem    2) качает SteamCMD, если его нет
-rem    3) качает CS2 (app 730), если игры нет
-rem    4) ставит Metamod:Source и CounterStrikeSharp, если их нет
-rem    5) кладёт плагин PanelSkins (уже собранный, .NET не нужен)
-rem    6) пишет server.cfg с вашим RCON-паролем
-rem    7) запускает сервер в режиме insecure (иначе плагины не работают)
+rem  Путь к серверу запоминается в файле cs2-path.txt рядом с батником,
+rem  поэтому при следующем двойном клике он снова использует его.
+rem  Если на диске по умолчанию мало места — сам выберет диск, где место есть.
 rem =============================================================
 chcp 65001 >nul 2>&1
 setlocal EnableExtensions EnableDelayedExpansion
 title CS2 сервер + скинченджер
 
 rem ------------------------- НАСТРОЙКИ -------------------------
+set "SCRIPT_DIR=%~dp0"
+set "PATH_FILE=%SCRIPT_DIR%cs2-path.txt"
+
 set "INSTALL_DIR=%~1"
+if "%INSTALL_DIR%"=="" if exist "%PATH_FILE%" set /p INSTALL_DIR=<"%PATH_FILE%"
 if "%INSTALL_DIR%"=="" set "INSTALL_DIR=%USERPROFILE%\cs2-server"
+
 set "RCON_PASSWORD=%~2"
 if "%RCON_PASSWORD%"=="" set "RCON_PASSWORD=cs2-%RANDOM%%RANDOM%"
 set "GSLT=%~3"
@@ -31,16 +31,12 @@ set "PORT=27015"
 set "MAP=de_dust2"
 set "MAXPLAYERS=10"
 set "AUTO_RESTART=1"
-
-set "SCRIPT_DIR=%~dp0"
-set "GAME_DIR=%INSTALL_DIR%\game"
-set "STEAMCMD_DIR=%INSTALL_DIR%\steamcmd"
-set "STEAMCMD_EXE=%STEAMCMD_DIR%\steamcmd.exe"
-set "CS2_EXE=%GAME_DIR%\game\bin\win64\cs2.exe"
-set "CSGO_DIR=%GAME_DIR%\game\csgo"
-set "STEAMCMD_URL=https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
-set "APP_ID=730"
 set "MIN_GB=45"
+set "APP_ID=730"
+set "STEAMCMD_URL=https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
+set "PLUGIN_SRC=%SCRIPT_DIR%plugins\PanelSkins"
+
+call :setpaths
 
 echo.
 echo  ============================================================
@@ -57,21 +53,50 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 if not exist "%STEAMCMD_DIR%" mkdir "%STEAMCMD_DIR%"
 if not exist "%GAME_DIR%" mkdir "%GAME_DIR%"
 
-set "DRIVE=%INSTALL_DIR:~0,1%"
-set "FREEG=0"
-for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "[math]::Floor((Get-PSDrive -Name '%DRIVE%').Free/1GB)" 2^>nul`) do set "FREEG=%%A"
-if not defined FREEG set "FREEG=0"
-echo        на диске %DRIVE%: свободно %FREEG% ГБ
-if %FREEG% GTR 0 if %FREEG% LSS %MIN_GB% (
-    echo.
-    echo   ОШИБКА: нужно минимум %MIN_GB% ГБ, свободно %FREEG% ГБ.
-    echo   CS2 dedicated — это полная игра, она весит 60-70 ГБ.
-    echo   Освободите место или запустите с другой папкой:
-    echo       %~nx0 D:\cs2-server
-    echo.
-    pause
-    exit /b 1
+call :freegb %DRIVE%
+echo        диск %DRIVE%: свободно %FREEG% ГБ
+
+if %FREEG% GEQ %MIN_GB% goto disk_ok
+if exist "%CS2_EXE%" (
+    echo        игра уже установлена — места хватает, продолжаю
+    goto disk_ok
 )
+
+rem место кончилось: ищем другой диск, где его достаточно
+echo        на %DRIVE%: меньше %MIN_GB% ГБ — ищу другой диск...
+set "BEST_DRIVE="
+set "BEST_FREE=0"
+for /f "usebackq tokens=1,2 delims==" %%A in (`powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem ^| Where-Object { $_.Free -gt 0 } ^| Sort-Object -Property Free -Descending ^| ForEach-Object { $_.Name + '=' + [math]::Floor($_.Free/1GB) }" 2^>nul`) do (
+    if %%B GTR !BEST_FREE! (
+        set "BEST_FREE=%%B"
+        set "BEST_DRIVE=%%A"
+    )
+)
+
+call :showdrives
+
+if not defined BEST_DRIVE goto disk_fail
+if !BEST_FREE! LSS %MIN_GB% goto disk_fail
+
+echo        ставлю на диск !BEST_DRIVE!: — там свободно !BEST_FREE! ГБ
+set "INSTALL_DIR=!BEST_DRIVE!:\cs2-server"
+call :setpaths
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
+if not exist "%STEAMCMD_DIR%" mkdir "%STEAMCMD_DIR%"
+if not exist "%GAME_DIR%" mkdir "%GAME_DIR%"
+goto disk_ok
+
+:disk_fail
+echo.
+echo   ОШИБКА: ни на одном диске нет %MIN_GB% ГБ.
+echo   CS2 dedicated — это полная игра, она весит 60-70 ГБ.
+echo   Освободите место или укажите папку сами:
+echo       %~nx0 E:\cs2-server
+echo.
+pause
+exit /b 1
+
+:disk_ok
 
 rem --------------------- [2/7] SteamCMD -------------------------
 echo [2/7] Проверяю SteamCMD...
@@ -102,7 +127,7 @@ echo        качаю CS2 ^(app %APP_ID%^), попытка %ATTEMPT% из 3 —
 "%STEAMCMD_EXE%" +force_install_dir "%GAME_DIR%" +login anonymous +app_update %APP_ID% validate +quit
 goto game_loop
 :game_ok
-echo        игра на месте: %CS2_EXE%
+echo        игра на месте
 
 rem --------------------- [4/7] Metamod + CSSharp ----------------
 echo [4/7] Проверяю Metamod и CounterStrikeSharp...
@@ -140,10 +165,8 @@ if exist "%SCRIPT_DIR%cfg\gamemode_competitive_server.cfg" (
     echo        gamemode_competitive_server.cfg установлен ^(боты выключены^)
 )
 
+rem --------------------- [5/7] плагин PanelSkins ----------------
 echo [5/7] Проверяю плагин PanelSkins...
-set "PLUGIN_SRC=%SCRIPT_DIR%plugins\PanelSkins"
-set "PLUGIN_DST=%CSGO_DIR%\addons\counterstrikesharp\plugins\PanelSkins"
-set "GAMEDATA_DST=%CSGO_DIR%\addons\counterstrikesharp\gamedata"
 if not exist "%PLUGIN_DST%" mkdir "%PLUGIN_DST%"
 if not exist "%GAMEDATA_DST%" mkdir "%GAMEDATA_DST%"
 
@@ -166,7 +189,6 @@ if not exist "%PLUGIN_DST%\PanelSkins.json" (
 
 rem --------------------- [6/7] server.cfg -----------------------
 echo [6/7] Готовлю server.cfg...
-set "CFG_DIR=%CSGO_DIR%\cfg"
 if not exist "%CFG_DIR%" mkdir "%CFG_DIR%"
 copy /y "%SCRIPT_DIR%cfg\server.cfg" "%CFG_DIR%\server.cfg" >nul
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%CFG_DIR%\server.cfg'; (Get-Content $f -Raw) -replace 'changeme_rcon_password','%RCON_PASSWORD%' | Set-Content $f -Encoding utf8"
@@ -185,7 +207,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%INSTALL_DIR%\start-
 if not "%GSLT%"=="" (
     powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%INSTALL_DIR%\start-cs2.bat'; (Get-Content $f -Raw) -replace 'set \"GSLT=\"','set \"GSLT=%GSLT%\"' | Set-Content $f -Encoding utf8"
 )
-echo        start-cs2.bat обновлён (теперь с -insecure)
+echo        start-cs2.bat обновлён ^(теперь с -insecure^)
+
+rem запомним путь, чтобы двойной клик в следующий раз попал туда же
+>"%PATH_FILE%" echo %INSTALL_DIR%
 
 rem --------------------- [7/7] запуск ---------------------------
 echo [7/7] Запускаю сервер...
@@ -221,6 +246,7 @@ if not errorlevel 1 (
 
 set "ARGS=-dedicated -console -usercon -insecure -port %PORT% -maxplayers_override %MAXPLAYERS%"
 set "ARGS=%ARGS% +map %MAP% +game_type 0 +game_mode 1"
+set "ARGS=%ARGS% +bot_quota 0"
 set "ARGS=%ARGS% +rcon_password %RCON_PASSWORD% +sv_password %SERVER_PASSWORD%"
 set "ARGS=%ARGS% +exec server.cfg"
 if not "%GSLT%"=="" set "ARGS=%ARGS% +sv_setsteamaccount %GSLT%"
@@ -252,8 +278,35 @@ if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
 
 :finished
 echo.
-echo   Сервер остановлен.
-echo   Логи сервера: %CSGO_DIR%\logs
+echo   Сервер остановлен. Логи: %CSGO_DIR%\logs
 pause
 endlocal
+exit /b 0
+
+rem ========================== процедуры ==========================
+
+:setpaths
+set "DRIVE=%INSTALL_DIR:~0,1%"
+set "GAME_DIR=%INSTALL_DIR%\game"
+set "STEAMCMD_DIR=%INSTALL_DIR%\steamcmd"
+set "STEAMCMD_EXE=%STEAMCMD_DIR%\steamcmd.exe"
+set "CS2_EXE=%GAME_DIR%\game\bin\win64\cs2.exe"
+set "CSGO_DIR=%GAME_DIR%\game\csgo"
+set "CFG_DIR=%CSGO_DIR%\cfg"
+set "PLUGIN_DST=%CSGO_DIR%\addons\counterstrikesharp\plugins\PanelSkins"
+set "GAMEDATA_DST=%CSGO_DIR%\addons\counterstrikesharp\gamedata"
+exit /b 0
+
+:freegb
+set "FREEG=0"
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "[math]::Floor((Get-PSDrive -Name '%~1').Free/1GB)" 2^>nul`) do set "FREEG=%%A"
+if not defined FREEG set "FREEG=0"
+if "%FREEG%"=="" set "FREEG=0"
+exit /b 0
+
+:showdrives
+echo        свободно по дискам:
+for /f "usebackq tokens=1,2 delims==" %%A in (`powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem ^| Where-Object { $_.Free -gt 0 } ^| Sort-Object -Property Free -Descending ^| ForEach-Object { $_.Name + '=' + [math]::Floor($_.Free/1GB) }" 2^>nul`) do (
+    echo          %%A: %%B ГБ
+)
 exit /b 0
