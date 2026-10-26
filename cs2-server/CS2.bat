@@ -104,6 +104,11 @@ echo   RCON-пароль   : %RCON_PASSWORD%
 if "%GSLT%"=="" (echo   GSLT-токен   : не задан — сервер будет в режиме LAN) else (echo   GSLT-токен   : задан)
 echo.
 
+rem --------------------- [0/7] панель ---------------------------
+echo [0/7] Поднимаю панель (без неё скины не выдадутся)...
+>>"%TRACE%" 2>nul echo [0/7] панель %DATE% %TIME%
+call :startpanel
+
 rem --------------------- [1/7] место на диске -------------------
 echo [1/7] Проверяю место на диске...
 >>"%TRACE%" 2>nul echo [1/7] 1 шаг %DATE% %TIME%
@@ -332,24 +337,7 @@ echo [7/7] Запускаю сервер...
 
 rem Проверим, жива ли панель: без неё плагин не получит скины
 set "PANEL_DIR=%SCRIPT_DIR%..\panel"
-set "PANEL_OK=0"
-for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 3 -UseBasicParsing; $r.StatusCode } catch { 0 }" 2^>nul`) do set "PANEL_OK=%%A"
-
-if "%PANEL_OK%"=="200" goto panel_ok
-
-echo        панель не отвечает — поднимаю её сам в отдельном окне
-where node >nul 2>&1
-if errorlevel 1 goto panel_no_node
-start "CS2 панель" /D "%PANEL_DIR%" cmd /c "set PLUGIN_API_KEY=%PLUGIN_KEY%&& npm install --no-audit --no-fund && npm start"
-echo        жду 15 секунд, пока панель поднимется...
-timeout /t 15 /nobreak >nul
-goto panel_ok
-
-:panel_no_node
-echo        Node.js не найден — поставьте его: https://nodejs.org
-echo        без панели сервер запустится, но скины выдавать будет нечем
-
-:panel_ok
+call :startpanel
 rem панель должна принимать наш ключ: 400 — ключ верный (ругается только на SteamID), 401 — ключ чужой
 set "KEY_OK="
 for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri ('http://127.0.0.1:3000/api/plugin/loadout/1?key=' + '%PLUGIN_KEY%') -TimeoutSec 4 -UseBasicParsing; 'ok' } catch { $c = 0; try { $c = [int]$_.Exception.Response.StatusCode.value__ } catch { $c = 0 }; if ($c -eq 400) { 'ok' } else { 'bad' } }" 2^>nul`) do set "KEY_OK=%%A"
@@ -365,7 +353,11 @@ rem свежий конфиг копируется из примера — пр�
 rem ключ плагина = тот же, что знает панель, иначе /api/plugin/loadout вернёт 401
 if not "%PLUGIN_KEY%"=="" (
     powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%PLUGIN_DST%\PanelSkins.json'; $j=[IO.File]::ReadAllText($f) | ConvertFrom-Json; $j.PanelUrl='http://127.0.0.1:3000'; $j.PluginKey='%PLUGIN_KEY%'; [IO.File]::WriteAllText($f,($j | ConvertTo-Json -Depth 6),(New-Object System.Text.UTF8Encoding($false)))"
-    echo        PanelSkins.json: адрес панели и ключ прописаны
+    set "KEY_WRITTEN=no"
+    for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "$j=[IO.File]::ReadAllText('%PLUGIN_DST%\PanelSkins.json') ^| ConvertFrom-Json; if ($j.PluginKey -eq '%PLUGIN_KEY%') { 'ok' } else { 'no' }"`) do set "KEY_WRITTEN=%%K"
+    if "!KEY_WRITTEN!"=="ok" (echo        ключ плагина прописан в PanelSkins.json) else (echo        ВНИМАНИЕ: ключ в PanelSkins.json не прописался - плагин получит 401)
+) else (
+    echo        ВНИМАНИЕ: ключ плагина пуст - плагин получит 401
 )
 
 set "ARGS=-dedicated -console -usercon -insecure -port %PORT% -maxplayers_override %MAXPLAYERS%"
@@ -465,6 +457,37 @@ for /f "usebackq tokens=1,2 delims==" %%A in (`powershell -NoProfile -Command "G
     echo          %%A: %%B ГБ
 )
 exit /b 0
+
+:startpanel
+rem  Панель должна отвечать ДО старта сервера, иначе плагин уйдёт в пустоту.
+set "PANEL_OK=0"
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 3 -UseBasicParsing; $r.StatusCode } catch { 0 }" 2^>nul`) do set "PANEL_OK=%%A"
+if "%PANEL_OK%"=="200" (
+    echo        панель отвечает на 127.0.0.1:3000
+    exit /b 0
+)
+where node >nul 2>&1
+if errorlevel 1 (
+    echo        Node.js не найден - поставьте его: https://nodejs.org
+    echo        без панели сервер запустится, но скины выдавать будет нечем
+    exit /b 1
+)
+echo        панель молчит - поднимаю её в отдельном окне
+start "CS2 панель" /D "%PANEL_DIR%" cmd /c "set PLUGIN_API_KEY=%PLUGIN_KEY%&& npm install --no-audit --no-fund && npm start"
+set "WAITED=0"
+
+:panel_wait
+set /a WAITED+=5
+timeout /t 5 /nobreak >nul
+set "PANEL_OK=0"
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 3 -UseBasicParsing; $r.StatusCode } catch { 0 }" 2^>nul`) do set "PANEL_OK=%%A"
+if "%PANEL_OK%"=="200" (
+    echo        панель поднялась ^(через %WAITED% сек^)
+    exit /b 0
+)
+if %WAITED% LSS 60 goto panel_wait
+echo        панель не поднялась за %WAITED% секунд - скины не выдадутся
+exit /b 1
 
 :dumpengine
 rem  сервер упал - снимем хвост его последнего лога в cs2-bat.log
