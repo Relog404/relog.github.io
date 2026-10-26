@@ -21,6 +21,8 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
     public PanelSkinsConfig Config { get; set; } = new();
 
     private PanelApiClient _api = null!;
+    private MenuApi _menuApi = null!;
+    private MenuUi _menu = null!;
     private readonly Dictionary<ulong, CachedLoadout> _cache = new();
 
     public void OnConfigParsed(PanelSkinsConfig config) => Config = config;
@@ -28,6 +30,8 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
     public override void Load(bool hotReload)
     {
         _api = new PanelApiClient(() => Config.PanelUrl, () => Config.PluginKey, Log);
+        _menuApi = new MenuApi(() => Config.PanelUrl, () => Config.PluginKey);
+        _menu = new MenuUi(this, _menuApi, Log);
 
         RegisterListener<Listeners.OnClientPutInServer>(OnClientPutInServer);
         RegisterListener<Listeners.OnEntityCreated>(OnEntityCreated);
@@ -35,6 +39,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
 
+        AddCommand("css_menu", "Меню скинов (по F1)", OnMenuCommand);
         AddCommand("css_skins", "Ссылка на сайт со скинами", OnSkinsCommand);
         AddCommand("css_refreshskins", "Обновить свои скины с сайта", OnRefreshCommand);
 
@@ -52,10 +57,14 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
     public override void Unload(bool hotReload)
     {
         _api?.Dispose();
+        _menuApi?.Dispose();
         _cache.Clear();
     }
 
     private void Log(string message) => Console.WriteLine("[PanelSkins] " + message);
+
+    /** Меню обязано открываться в главном потоке движка. */
+    public void NextFrame(Action action) => Server.NextFrame(action);
 
     /* ------------------------------ события ------------------------------- */
 
@@ -68,6 +77,17 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         if (steamId <= 0) return;
 
         _ = RefreshLoadoutAsync(steamId);
+
+        // F1 = меню скинов. Бинд ставится на стороне клиента при каждом входе.
+        try
+        {
+            controller.ExecuteClientCommand("bind F1 css_menu");
+            controller.PrintToChat(" [PanelSkins] Меню скинов — F1 (или !css_menu)");
+        }
+        catch (Exception ex)
+        {
+            Log($"не удалось повесить F1: {ex.Message}");
+        }
     }
 
     private void OnClientDisconnect(int playerSlot)
@@ -172,6 +192,13 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
     }
 
     /* ------------------------------ команды ------------------------------- */
+
+    /** Открывает внутриигровое меню: команда css_menu (биндится на F1). */
+    private void OnMenuCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid || player.IsBot) return;
+        _menu.OpenMain(player);
+    }
 
     private void OnSkinsCommand(CCSPlayerController? player, CommandInfo info)
     {

@@ -440,6 +440,149 @@ export function createApp() {
     res.json(economy.pluginLoadout(req.params.steamId));
   });
 
+  /* --------------------- внутриигровое меню (F1) --------------------- */
+
+  const pluginMenuAllowed = (req) => {
+    const key = req.get('X-Plugin-Key') || req.query.key;
+    return (config.pluginApiKey && key === config.pluginApiKey) || store.isValidPluginKey(key);
+  };
+
+  /** Состояние игрока для меню в игре: баланс, кейсы, инвентарь, слоты, магазин, топ. */
+  const pluginMenuState = (steamId, query = {}) => {
+    const econ = economy.stateFor(steamId);
+    const catalog = items.loadItems();
+    const byId = new Map(catalog.map((item) => [item.id, item]));
+    const describe = (itemId, fallback = '') => {
+      const item = byId.get(itemId);
+      return item ? `${item.weapon} | ${item.pattern}` : (fallback || String(itemId));
+    };
+
+    const category = String(query.category || '').trim();
+    const search = String(query.q || '').trim();
+    const shop = (category || search)
+      ? items.queryItems({ category, query: search, page: Number(query.page) || 1, pageSize: 10, sort: 'rarity' })
+      : null;
+
+    return {
+      steamId: String(steamId),
+      coins: econ.coins || 0,
+      cases: economy.listCases().map((item) => ({ id: item.id, name: item.name, price: item.price })),
+      inventory: (econ.items || []).map((entry) => ({
+        uid: entry.uid,
+        itemId: entry.itemId,
+        name: describe(entry.itemId),
+        price: entry.price,
+        rarity: byId.get(entry.itemId)?.rarity || '',
+      })),
+      equipped: Object.entries(econ.equipped || {}).map(([slot, equipped]) => ({
+        slot,
+        uid: equipped.uid,
+        name: describe(equipped.itemId),
+      })),
+      slots: items.slotIndex().map((slot) => ({ key: slot.key, label: slot.label })),
+      categories: items.categoryIndex().map((entry) => ({
+        category: entry.category,
+        count: entry.count,
+      })),
+      shop: shop
+        ? {
+            items: shop.items.map((item) => ({
+              id: item.id,
+              name: `${item.weapon} | ${item.pattern}`,
+              price: item.price,
+              rarity: item.rarity,
+            })),
+            page: shop.page,
+            pages: shop.pages,
+          }
+        : null,
+      top: economy
+        .listUsers()
+        .sort((a, b) => (b.wagered || 0) - (a.wagered || 0))
+        .slice(0, 5)
+        .map((user) => ({ steamId: user.steamId, wagered: user.wagered || 0, coins: user.coins || 0 })),
+    };
+  };
+
+  app.get('/api/plugin/menu/:steamId', (req, res) => {
+    if (!pluginMenuAllowed(req)) return res.status(401).json({ error: 'Нужен ключ плагина' });
+    if (!/^\d{5,20}$/.test(req.params.steamId)) return res.status(400).json({ error: 'Некорректный SteamID' });
+    try {
+      res.json(pluginMenuState(req.params.steamId, req.query));
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /** Действия из меню в игре: тело { steamId, action, ... }. */
+  app.post('/api/plugin/menu/action', (req, res) => {
+    if (!pluginMenuAllowed(req)) return res.status(401).json({ error: 'Нужен ключ плагина' });
+    const { steamId, action } = req.body || {};
+    if (!/^\d{5,20}$/.test(String(steamId || ''))) return res.status(400).json({ error: 'Некорректный SteamID' });
+
+    const answer = (payload) => res.json({ ok: true, coins: economy.stateFor(steamId).coins || 0, ...payload });
+
+    try {
+      if (action === 'open_case') {
+        const outcome = economy.openCase(steamId, req.body.caseId);
+        return answer({
+          message: 'Кейс открыт',
+          prize: {
+            name: `${outcome.prize.weapon} | ${outcome.prize.pattern}`,
+            rarity: outcome.prize.rarity,
+            price: outcome.prize.price,
+          },
+        });
+      }
+      if (action === 'buy') {
+        const bought = economy.buyItem(steamId, req.body.itemId);
+        return answer({ message: `Куплено: ${bought.item.weapon} | ${bought.item.pattern}` });
+      }
+      if (action === 'sell') {
+        const sold = economy.sellItem(steamId, req.body.uid);
+        return answer({ message: `Продано за ${sold.refund}` });
+      }
+      if (action === 'equip') {
+        economy.equipItem(steamId, req.body.slot, req.body.uid, {
+          wear: req.body.wear,
+          seed: req.body.seed,
+          statTrak: req.body.statTrak,
+          kills: req.body.kills,
+        });
+        return answer({ message: 'Скин надет' });
+      }
+      if (action === 'unequip') {
+        economy.unequipSlot(steamId, req.body.slot);
+        return answer({ message: 'Скин снят' });
+      }
+      if (action === 'upgrade') {
+        const uids = Array.isArray(req.body.uids) ? req.body.uids : [req.body.uids].filter(Boolean);
+        const outcome = economy.playUpgrade(steamId, uids, req.body.targetItemId);
+        return answer({
+          message: outcome.win ? 'Апгрейд выиграл!' : 'Апгрейд не зашёл',
+          won: Boolean(outcome.win),
+          multiplier: outcome.multiplier,
+          prize: outcome.target
+            ? { name: `${outcome.target.weapon} | ${outcome.target.pattern}`, rarity: outcome.target.rarity, price: outcome.target.price }
+            : null,
+        });
+      }
+      if (action === 'suggest') {
+        const stake = Number(req.body.stake) || 0;
+        const multiplier = Number(req.body.multiplier) || 2;
+        return answer({ targets: economy.suggestTargets(stake, multiplier, 5) });
+      }
+      if (action === 'daily') {
+        const coins = economy.claimDaily(steamId);
+        return answer({ message: `Бонус начислен, баланс: ${coins}` });
+      }
+      return res.status(400).json({ error: 'Неизвестное действие' });
+    } catch (error) {
+      res.status(400).json({ ok: false, error: error.message });
+    }
+  });
+
+
   app.post('/api/servers/:id/plugin-key', requireAdmin, (req, res) => {
     const key = store.regeneratePluginKey(req.params.id);
     if (!key) return res.status(404).json({ error: 'Сервер не найден' });
