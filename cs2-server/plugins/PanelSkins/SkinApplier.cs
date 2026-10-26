@@ -19,8 +19,56 @@ namespace PanelSkins;
  */
 public static class SkinApplier
 {
-    private static readonly MemoryFunctionVoid<nint, string, float> SetAttribute =
-        new(GameData.GetSignature("CAttributeList_SetOrAddAttributeValueByName"));
+    /*
+     * Нативную функцию ищем лениво и осторожно: если сигнатуры в движке нет
+     * (обновился CS2) или вызов падает — отключаем только атрибуты покраски,
+     * а сам сервер продолжает работать: paint/seed/wear выставляются и без них.
+     */
+    private static MemoryFunctionVoid<nint, string, float>? _setAttribute;
+    private static bool _resolveFailed;
+    private static bool _attributesDisabled;
+
+    /// <summary>Полностью выключить нативные вызовы (ApplyAttributes = false в конфиге).</summary>
+    public static void DisableAttributes() => _attributesDisabled = true;
+
+    private static MemoryFunctionVoid<nint, string, float>? Resolve()
+    {
+        if (_setAttribute is not null) return _setAttribute;
+        if (_resolveFailed) return null;
+
+        try
+        {
+            _setAttribute = new MemoryFunctionVoid<nint, string, float>(
+                GameData.GetSignature("CAttributeList_SetOrAddAttributeValueByName"));
+        }
+        catch (Exception ex)
+        {
+            _resolveFailed = true;
+            Console.WriteLine("[PanelSkins] не найдена CAttributeList_SetOrAddAttributeValueByName: " + ex.Message);
+            Console.WriteLine("[PanelSkins] атрибуты покраски отключены, скины работают через Fallback-поля.");
+        }
+
+        return _setAttribute;
+    }
+
+    private static void SetAttr(nint list, string name, float value)
+    {
+        if (_attributesDisabled || list == 0) return;
+
+        var fn = Resolve();
+        if (fn is null) return;
+
+        try
+        {
+            fn.Invoke(list, name, value);
+        }
+        catch (Exception ex)
+        {
+            _attributesDisabled = true;
+            Console.WriteLine("[PanelSkins] вызов атрибутов покраски упал: " + ex.Message);
+            Console.WriteLine("[PanelSkins] больше не вызываю нативную функцию — сервер продолжает работать.");
+        }
+    }
 
     /// <summary>Целое число упаковываем во float: движок хранит атрибуты так же.</summary>
     private static float ViewAsFloat(uint value) => BitConverter.Int32BitsToSingle((int)value);
@@ -36,6 +84,8 @@ public static class SkinApplier
         if (skin.Def > 0)
             item.ItemDefinitionIndex = (ushort)skin.Def;
 
+        item.Initialized = true;
+
         // Fallback-поля сетевые: клиент сам подтянет модель и текстуру.
         weapon.FallbackPaintKit = skin.Paint;
         weapon.FallbackSeed = seed;
@@ -48,8 +98,8 @@ public static class SkinApplier
         if (skin.StatTrak)
         {
             item.EntityQuality = 9; // StatTrak
-            SetAttribute.Invoke(item.NetworkedDynamicAttributes.Handle, "kill eater", ViewAsFloat((uint)skin.Kills));
-            SetAttribute.Invoke(item.NetworkedDynamicAttributes.Handle, "kill eater score type", 0);
+            SetAttr(item.NetworkedDynamicAttributes.Handle, "kill eater", ViewAsFloat((uint)skin.Kills));
+            SetAttr(item.NetworkedDynamicAttributes.Handle, "kill eater score type", 0);
         }
         else
         {
@@ -77,8 +127,8 @@ public static class SkinApplier
 
     private static void SetPaint(CAttributeList list, int paint, int seed, float wear)
     {
-        SetAttribute.Invoke(list.Handle, "set item texture prefab", paint);
-        SetAttribute.Invoke(list.Handle, "set item texture seed", seed);
-        SetAttribute.Invoke(list.Handle, "set item texture wear", wear);
+        SetAttr(list.Handle, "set item texture prefab", paint);
+        SetAttr(list.Handle, "set item texture seed", seed);
+        SetAttr(list.Handle, "set item texture wear", wear);
     }
 }

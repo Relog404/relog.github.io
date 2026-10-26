@@ -33,6 +33,16 @@ public sealed class PanelSkinsConfig : BasePluginConfig
     [JsonPropertyName("DefaultSeed")]
     public int DefaultSeed { get; set; } = 0;
 
+    /// <summary>
+    /// Вызывать нативную функцию атрибутов покраски (paint/seed/wear дублируются
+    /// в атрибутах, как в CS:GO, + работает StatTrak).
+    /// По умолчанию ВЫКЛЮЧЕНО: это единственное место плагина, которое лезет
+    /// в нативный код движка и может уронить сервер, если сигнатура устарела.
+    /// Скины видны и без него — через FallbackPaintKit/Seed/Wear.
+    /// </summary>
+    [JsonPropertyName("ApplyAttributes")]
+    public bool ApplyAttributes { get; set; } = false;
+
     /// <summary>Писать в консоль сервера отладочную информацию.</summary>
     [JsonPropertyName("Debug")]
     public bool Debug { get; set; } = false;

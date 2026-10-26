@@ -226,10 +226,11 @@ echo [5/7] Проверяю плагин PanelSkins...
 if not exist "%PLUGIN_DST%" mkdir "%PLUGIN_DST%"
 if not exist "%GAMEDATA_DST%" mkdir "%GAMEDATA_DST%"
 
-if not exist "%PLUGIN_DST%\PanelSkins.dll" (
-    if exist "%PLUGIN_SRC%\prebuilt\PanelSkins.dll" (
-        copy /y "%PLUGIN_SRC%\prebuilt\PanelSkins.dll" "%PLUGIN_DST%\PanelSkins.dll" >nul
-    ) else (
+if exist "%PLUGIN_SRC%\prebuilt\PanelSkins.dll" (
+    copy /y "%PLUGIN_SRC%\prebuilt\PanelSkins.dll" "%PLUGIN_DST%\PanelSkins.dll" >nul
+    echo        PanelSkins.dll обновлён из готовой сборки
+) else (
+    if not exist "%PLUGIN_DST%\PanelSkins.dll" (
         echo        готовой сборки рядом нет — качаю с GitHub
         powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Relog404/relog.github.io/main/cs2-server/plugins/PanelSkins/prebuilt/PanelSkins.dll' -OutFile '%PLUGIN_DST%\PanelSkins.dll' } catch { Write-Host 'не скачалось' }"
     )

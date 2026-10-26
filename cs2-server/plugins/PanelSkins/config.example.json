@@ -7,5 +7,6 @@
   "ApplyGloves": true,
   "DefaultWear": 0.001,
   "DefaultSeed": 0,
+  "ApplyAttributes": false,
   "Debug": false
 }

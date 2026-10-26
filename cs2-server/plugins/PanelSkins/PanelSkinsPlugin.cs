@@ -38,6 +38,12 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         AddCommand("css_skins", "Ссылка на сайт со скинами", OnSkinsCommand);
         AddCommand("css_refreshskins", "Обновить свои скины с сайта", OnRefreshCommand);
 
+        if (!Config.ApplyAttributes)
+        {
+            SkinApplier.DisableAttributes();
+            Log("ApplyAttributes=false - нативные атрибуты покраски отключены, работают только Fallback-поля.");
+        }
+
         Log("PanelSkins загружен. Панель: " + Config.PanelUrl);
         if (string.IsNullOrWhiteSpace(Config.PluginKey))
             Log("ВНИМАНИЕ: PluginKey пуст — панель отдаст 401. Возьмите ключ в админке панели.");
