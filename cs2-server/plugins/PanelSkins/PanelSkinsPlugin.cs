@@ -40,6 +40,21 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventPlayerActivate>(OnPlayerActivate);
 
+        RegisterListener<Listeners.OnTick>(OnTick);
+        RegisterEventHandler<EventRoundStart>(OnRoundStart);
+
+        AddCommand("css_panelcheck", "Проверить связь с панелью", OnPanelCheckCommand);
+
+        // цифры 1..9 выбирают пункты: пока меню открыто, перехватываем slot1..slot9,
+        // бинды игрока при этом не трогаем — без меню цифры снова переключают оружие
+        for (var slot = 1; slot <= 9; slot++)
+        {
+            var number = slot;
+            AddCommandListener("slot" + number, (player, info) => OnSlot(player, number), HookMode.Pre);
+        }
+        AddCommandListener("say", OnSay, HookMode.Pre);
+        AddCommandListener("say_team", OnSay, HookMode.Pre);
+
         AddCommand("css_menu", "Меню скинов (по F1)", OnMenuCommand);
         AddCommand("css_skins", "Ссылка на сайт со скинами", OnSkinsCommand);
         AddCommand("css_refreshskins", "Обновить свои скины с сайта", OnRefreshCommand);
@@ -99,8 +114,8 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
             try
             {
                 if (!controller.IsValid) return;
-                controller.ExecuteClientCommand("bind F1 css_menu");
-                controller.PrintToChat(" [PanelSkins] Меню скинов — F1 (или !css_menu)");
+                BindMenuKey(controller);
+                controller.PrintToChat(" [PanelSkins] Меню скинов: F1, !menu в чате или цифры 1-9");
             }
             catch (Exception ex)
             {
@@ -118,10 +133,104 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         Server.NextFrame(() => TryApplyWeaponSkin(weapon));
     }
 
+    /** F1 вешаем и при входе, и на спавне: на экране загрузки клиент его игнорирует. */
+    private void BindMenuKey(CCSPlayerController controller)
+    {
+        if (!Config.BindF1Menu) return;
+        try
+        {
+            controller.ExecuteClientCommand("bind F1 css_menu");
+        }
+        catch (Exception ex)
+        {
+            Log($"не удалось повесить F1: {ex.Message}");
+        }
+    }
+
+    /** Перерисовка открытых меню: сообщение в центре экрана живёт несколько секунд. */
+    private int _ticks;
+
+    private void OnTick()
+    {
+        if (++_ticks < 192) return; // примерно каждые 3 секунды
+        _ticks = 0;
+        _menu.Refresh();
+    }
+
+    /** Раунд начался — меню закрываем, чтобы цифры снова переключали оружие. */
+    private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
+    {
+        foreach (var player in Utilities.GetPlayers())
+        {
+            if (player is null || !player.IsValid) continue;
+            _menu.Close(player);
+        }
+        return HookResult.Continue;
+    }
+
+    private HookResult OnSlot(CCSPlayerController? player, int number)
+    {
+        if (player is null || !player.IsValid || player.IsBot) return HookResult.Continue;
+        return _menu.HandleKey(player, number) ? HookResult.Stop : HookResult.Continue;
+    }
+
+    private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
+    {
+        var text = (info.ArgString ?? "").Trim().Trim('"').Trim().ToLowerInvariant();
+        if (text is not ("!menu" or "/menu" or "!меню" or "/меню" or "!менюшка" or "!skins" or "/skins")) return HookResult.Continue;
+
+        if (player is not null && player.IsValid && !player.IsBot) _menu.OpenMain(player);
+        return HookResult.Stop;
+    }
+
+    /** Диагностика: видно, доходит ли плагин до панели и что она отвечает. */
+    private void OnPanelCheckCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        ulong steamId = player?.SteamID ?? 0;
+        if (steamId == 0)
+        {
+            foreach (var candidate in Utilities.GetPlayers())
+            {
+                if (candidate is not null && candidate.IsValid && !candidate.IsBot && candidate.SteamID > 0)
+                {
+                    steamId = candidate.SteamID;
+                    break;
+                }
+            }
+        }
+
+        Log($"проверка связи: панель {Config.PanelUrl}, ключ " +
+            (string.IsNullOrWhiteSpace(Config.PluginKey) ? "НЕ ЗАДАН — панель отдаст 401" : "задан"));
+
+        _ = Task.Run(async () =>
+        {
+            MenuState? state = null;
+            LoadoutResponse? loadout = null;
+            try
+            {
+                state = await _menuApi.FetchAsync(steamId);
+                if (steamId > 0) loadout = await _api.FetchLoadoutAsync(steamId);
+            }
+            catch (Exception ex)
+            {
+                Log($"проверка связи: {ex.Message}");
+            }
+
+            Log(state is null
+                ? $"панель НЕ отвечает или не пускает (проверь адрес и ключ). SteamID {steamId}"
+                : $"панель отвечает: монеты {state.Coins}, кейсов {state.Cases?.Count ?? 0}, вещей в инвентаре {state.Inventory?.Count ?? 0}");
+            Log(loadout is null
+                ? "набор скинов пуст: на сайте ничего не надето, либо панель не отдала данные"
+                : $"набор скинов: оружие {loadout.Weapons?.Count ?? 0}, нож {loadout.Knife?.Def}, перчатки {loadout.Gloves?.Def}");
+        });
+    }
+
     private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
     {
         var controller = @event.Userid;
         if (controller is null || !controller.IsValid || controller.IsBot) return HookResult.Continue;
+
+        BindMenuKey(controller);
 
         var loadout = GetLoadout(controller.SteamID);
         if (loadout?.Gloves is null || !Config.ApplyGloves) return HookResult.Continue;
