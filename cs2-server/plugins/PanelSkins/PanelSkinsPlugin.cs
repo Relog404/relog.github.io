@@ -273,20 +273,9 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
 
         BindMenuKey(controller);
 
-        var loadout = GetLoadout(controller.SteamID);
-        if (loadout?.Gloves is null || !Config.ApplyGloves) return HookResult.Continue;
-
-        var pawn = controller.PlayerPawn?.Value;
-        if (pawn is null || !pawn.IsValid) return HookResult.Continue;
-
-        try
-        {
-            SkinApplier.ApplyGloves(pawn, loadout.Gloves);
-        }
-        catch (Exception ex)
-        {
-            Log($"не удалось надеть перчатки: {ex.Message}");
-        }
+        // на спавне перекрашиваем и перчатки, и всё, что оказалось в руках:
+        // момент создания оружия легко пропустить, а здесь — надёжно
+        ApplyToHeldWeapons(controller);
 
         return HookResult.Continue;
     }
@@ -343,6 +332,43 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         }
     }
 
+    /** Сбросить кэш набора и заново перекрасить всё, что игрок держит. */
+    public void RefreshSkinsNow(CCSPlayerController player)
+    {
+        var steamId = player.SteamID;
+        if (steamId <= 0) return;
+
+        _cache.Remove(steamId);
+        _ = RefreshLoadoutAsync(steamId).ContinueWith(_ => Server.NextFrame(() => ApplyToHeldWeapons(player)));
+    }
+
+    /** Перекрашивает оружие в руках и перчатки — после «Надеть» и на спавне. */
+    public void ApplyToHeldWeapons(CCSPlayerController player)
+    {
+        try
+        {
+            var pawn = player.PlayerPawn?.Value;
+            if (pawn is null || !pawn.IsValid) return;
+
+            var weapons = pawn.WeaponServices?.MyWeapons;
+            if (weapons is not null)
+            {
+                for (var i = 0; i < weapons.Count; i++)
+                {
+                    var held = weapons[i].Value;
+                    if (held is not null && held.IsValid) TryApplyWeaponSkin(held);
+                }
+            }
+
+            if (Config.ApplyGloves && GetLoadout(player.SteamID)?.Gloves is { } gloves)
+                SkinApplier.ApplyGloves(pawn, gloves);
+        }
+        catch (Exception ex)
+        {
+            Log($"не удалось перекрасить оружие в руках: {ex.Message}");
+        }
+    }
+
     /* ------------------------------- кэш ---------------------------------- */
 
     private async Task RefreshLoadoutAsync(ulong steamId)
@@ -384,38 +410,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         var steamId = player.SteamID;
         if (steamId <= 0) return;
 
-        _cache.Remove(steamId);
-        _ = RefreshLoadoutAsync(steamId).ContinueWith(_ =>
-        {
-            player.PrintToChat(" Скины обновлены с сайта.");
-
-            // перекрашиваем то, что уже в руках: иначе новый скин появится только
-            // когда оружие создастся заново — на респауне или при покупке
-            Server.NextFrame(() =>
-            {
-                try
-                {
-                    var pawn = player.PlayerPawn?.Value;
-                    if (pawn is null || !pawn.IsValid) return;
-
-                    var weapons = pawn.WeaponServices?.MyWeapons;
-                    if (weapons is not null)
-                    {
-                        for (var i = 0; i < weapons.Count; i++)
-                        {
-                            var held = weapons[i].Value;
-                            if (held is not null && held.IsValid) TryApplyWeaponSkin(held);
-                        }
-                    }
-
-                    if (Config.ApplyGloves && GetLoadout(steamId)?.Gloves is { } gloves)
-                        SkinApplier.ApplyGloves(pawn, gloves);
-                }
-                catch (Exception ex)
-                {
-                    Log($"не удалось перекрасить оружие в руках: {ex.Message}");
-                }
-            });
-        });
+        RefreshSkinsNow(player);
+        player.PrintToChat(" Скины обновлены с сайта.");
     }
 }

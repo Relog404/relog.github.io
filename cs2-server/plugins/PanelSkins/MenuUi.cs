@@ -187,7 +187,13 @@ public sealed class MenuUi
 
             _plugin.NextFrame(() =>
             {
-                if (player.IsValid) ShowResult(player, title, result);
+                if (!player.IsValid) return;
+
+                // набор на сайте изменился — старый кэш уже не годится, иначе
+                // «Надеть» сработает, а скин появится только через пару минут
+                if (result?.Ok == true) _plugin.RefreshSkinsNow(player);
+
+                ShowResult(player, title, result);
             });
         });
     }

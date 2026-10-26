@@ -305,6 +305,17 @@ if not exist "%PLUGIN_DST%\PanelSkins.json" (
     echo        создан конфиг: %PLUGIN_DST%\PanelSkins.json
 )
 
+
+rem  Пока FollowCS2ServerGuidelines включён (так стоит по умолчанию), CSSharp
+rem  молча блокирует запись свойств предметов — скины не накладываются вообще.
+rem  У нашего сервера нет GSLT-токена, так что блокировать тут нечего.
+if exist "%CSHARP_DIR%" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='%CSHARP_DIR%\configs'; if (-not [IO.Directory]::Exists($d)) { [IO.Directory]::CreateDirectory($d) | Out-Null }; $p=$d + '\core.json'; $h=@{}; if ([IO.File]::Exists($p)) { try { $j=Get-Content $p -Raw | ConvertFrom-Json; foreach ($pr in $j.PSObject.Properties) { $h[$pr.Name]=$pr.Value } } catch { $h=@{} } }; $h['FollowCS2ServerGuidelines']=$false; [IO.File]::WriteAllText($p,($h | ConvertTo-Json -Depth 6),(New-Object System.Text.UTF8Encoding($false)))"
+    set "CORE_OK=нет файла"
+    for /f "usebackq delims=" %%C in (`powershell -NoProfile -Command "$p='%CSHARP_DIR%\configs\core.json'; $r='нет файла'; if ([IO.File]::Exists($p)) { try { $j=Get-Content $p -Raw | ConvertFrom-Json; if ($j.FollowCS2ServerGuidelines -eq $false) { $r='ok' } else { $r='включено' } } catch { $r='битый' } }; $r"`) do set "CORE_OK=%%C"
+    if "!CORE_OK!"=="ok" (echo        core.json: FollowCS2ServerGuidelines=false - скины разрешены) else (echo        ВНИМАНИЕ: core.json не исправлен ^(!CORE_OK!^) - скины блокируются CSSharp)
+)
+
 rem --------------------- [6/7] server.cfg -----------------------
 echo [6/7] Готовлю server.cfg...
 >>"%TRACE%" 2>nul echo [6/7] 6 шаг %DATE% %TIME%
@@ -447,6 +458,7 @@ set "STEAMCMD_EXE=%STEAMCMD_DIR%\steamcmd.exe"
 set "CS2_EXE=%GAME_DIR%\game\bin\win64\cs2.exe"
 set "CSGO_DIR=%GAME_DIR%\game\csgo"
 set "CFG_DIR=%CSGO_DIR%\cfg"
+set "CSHARP_DIR=%CSGO_DIR%\addons\counterstrikesharp"
 set "PLUGIN_DST=%CSGO_DIR%\addons\counterstrikesharp\plugins\PanelSkins"
 set "PLUGIN_CFG_DST=%CSGO_DIR%\addons\counterstrikesharp\configs\plugins\PanelSkins"
 set "GAMEDATA_DST=%CSGO_DIR%\addons\counterstrikesharp\gamedata"
