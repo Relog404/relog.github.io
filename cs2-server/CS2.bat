@@ -38,6 +38,18 @@ set "PLUGIN_SRC=%SCRIPT_DIR%plugins\PanelSkins"
 
 call :setpaths
 
+rem сервер уже ставился в другое место — найдём его, чтобы не качать вторую копию
+if exist "%CS2_EXE%" goto path_known
+for %%D in (C D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
+    if exist "%%D:\cs2-server\game\game\bin\win64\cs2.exe" (
+        set "INSTALL_DIR=%%D:\cs2-server"
+        goto path_known
+    )
+)
+
+:path_known
+call :setpaths
+
 echo.
 echo  ============================================================
 echo   CS2 сервер + скины с панели — всё в одном файле
