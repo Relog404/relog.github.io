@@ -143,6 +143,14 @@ code {
 .server-select { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
 .auth-box { display: flex; align-items: center; gap: 10px; }
 .auth-box img { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line-2); }
+.avatar-ph {
+  width: 38px; height: 38px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+  border: 1px solid var(--line-2); background: var(--glass-2); color: var(--muted);
+}
+.avatar-ph b { color: var(--text-dim); font-size: 13px; line-height: 1; }
+.steam-ico { flex: none; fill: currentColor; }
+.btn-steam { display: inline-flex; align-items: center; gap: 8px; }
 .auth-name { font-weight: 600; font-size: 14px; }
 
 .badge {
