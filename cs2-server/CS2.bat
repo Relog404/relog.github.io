@@ -146,7 +146,9 @@ echo [4/7] Проверяю Metamod и CounterStrikeSharp...
 set "NEED_PLUGINS=0"
 set "GI_OK=0"
 if not exist "%CSGO_DIR%\addons\counterstrikesharp" set "NEED_PLUGINS=1"
-if not exist "%CSGO_DIR%\addons\metamod" set "NEED_PLUGINS=1"
+set "MM_OK=0"
+if exist "%CSGO_DIR%\addons\metamod\bin\win64\*.dll" set "MM_OK=1"
+if "%MM_OK%"=="0" set "NEED_PLUGINS=1"
 if exist "%CSGO_DIR%\gameinfo.gi" findstr /c:"addons/metamod" "%CSGO_DIR%\gameinfo.gi" >nul 2>&1 && set "GI_OK=1"
 if "%GI_OK%"=="0" set "NEED_PLUGINS=1"
 if "%NEED_PLUGINS%"=="1" goto install_plugins
@@ -156,12 +158,22 @@ goto gi_check
 echo        ставлю Metamod + CounterStrikeSharp и правлю gameinfo.gi...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install-plugins.ps1" -InstallDir "%INSTALL_DIR%"
 if errorlevel 1 echo        установщик плагинов завершился с ошибкой — текст выше
-if exist "%CSGO_DIR%\addons\metamod\bin\win64\server.dll" (
-    echo        metamod на месте
+set "MM_OK=0"
+if exist "%CSGO_DIR%\addons\metamod\bin\win64\*.dll" set "MM_OK=1"
+if "%MM_OK%"=="1" (
+    echo        metamod на месте:
+    dir /b "%CSGO_DIR%\addons\metamod\bin\win64\*.dll"
 ) else (
-    echo        ВНИМАНИЕ: нет %CSGO_DIR%\addons\metamod\bin\win64\server.dll
-    echo        плагины не загрузятся — установите metamod вручную:
-    echo        https://github.com/alliedmodders/metamod-source/releases
+    echo.
+    echo   ============================================================
+    echo     METAMOD НЕ УСТАНОВЛЕН - плагины не загрузятся.
+    echo     Причина - в тексте выше.
+    echo     Вручную: распаковать папку addons из архива
+    echo       mmsource-2.0.0-git1483-windows.zip
+    echo     в папку: %CSGO_DIR%
+    echo   ============================================================
+    echo.
+    pause
 )
 
 :gi_check
