@@ -124,6 +124,9 @@ if ((Test-Runtime $mmDir) -and ($mmInstalled -eq $MmVersion)) {
     Write-Host "   уже установлен: $mmDir ($mmInstalled)"
 } else {
     try {
+        if ($mmInstalled -and ($mmInstalled -ne $MmVersion)) {
+            Remove-Item -Recurse -Force $mmDir -ErrorAction SilentlyContinue
+        }
         Install-FromZip -Url $MetamodUrl -Name 'metamod'
         Set-Content -Path $mmMarker -Value $MmVersion
     } catch {
@@ -150,6 +153,8 @@ if ((Test-Runtime $cssDir) -and ($cssInstalled -eq $CssVersion)) {
         Write-Host ""
         Write-Host "== CounterStrikeSharp ==" -ForegroundColor Cyan
         Write-Host "   стоит $cssInstalled, нужна $CssVersion - обновляю"
+        Write-Host "   старую версию удаляю целиком, чтобы не осталось лишних файлов"
+        Remove-Item -Recurse -Force $cssDir -ErrorAction SilentlyContinue
     }
     try {
         Install-FromZip -Url $CssUrl -Name 'counterstrikesharp'

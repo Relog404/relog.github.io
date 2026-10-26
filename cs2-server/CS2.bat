@@ -202,11 +202,26 @@ if exist "%CSGO_DIR%\addons\metamod\bin\win64\*.dll" set "MM_OK=1"
 if "%MM_OK%"=="0" set "NEED_PLUGINS=1"
 if exist "%CSGO_DIR%\gameinfo.gi" findstr /c:"addons/metamod" "%CSGO_DIR%\gameinfo.gi" >nul 2>&1 && set "GI_OK=1"
 if "%GI_OK%"=="0" set "NEED_PLUGINS=1"
-if "%NEED_PLUGINS%"=="1" goto install_plugins
-goto gi_check
+rem  установщик зовём ВСЕГДА: версии сверяет он сам, по маркерам.
+rem  Проверять только «есть ли dll на диске» нельзя: после обновления CS2
+rem  старый CSSharp спокойно лежит на месте, но роняет сервер ровно в тот
+rem  момент, когда заходит игрок (PlayerManager::OnAuthorized, CS2 1.41.9.2).
+goto install_plugins
 
 :install_plugins
-echo        ставлю Metamod + CounterStrikeSharp и правлю gameinfo.gi...
+set "CSS_VER="
+if exist "%CSGO_DIR%\addons\counterstrikesharp\css-version.txt" for /f "usebackq delims=" %%V in ("%CSGO_DIR%\addons\counterstrikesharp\css-version.txt") do set "CSS_VER=%%V"
+if defined CSS_VER echo        на диске CounterStrikeSharp %CSS_VER%
+set "MM_VER="
+if exist "%CSGO_DIR%\addons\metamod\mm-version.txt" for /f "usebackq delims=" %%V in ("%CSGO_DIR%\addons\metamod\mm-version.txt") do set "MM_VER=%%V"
+if defined MM_VER echo        на диске Metamod %MM_VER%
+if exist "%SCRIPT_DIR%force-reinstall.txt" (
+    echo        вижу force-reinstall.txt - сношу старые addons и ставлю заново
+    del /q "%SCRIPT_DIR%force-reinstall.txt" >nul 2>&1
+    if exist "%CSGO_DIR%\addons\metamod" rmdir /s /q "%CSGO_DIR%\addons\metamod" >nul 2>&1
+    if exist "%CSGO_DIR%\addons\counterstrikesharp" rmdir /s /q "%CSGO_DIR%\addons\counterstrikesharp" >nul 2>&1
+)
+echo        проверяю Metamod + CounterStrikeSharp и правлю gameinfo.gi...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%install-plugins.ps1" -InstallDir "%INSTALL_DIR%"
 if errorlevel 1 echo        установщик плагинов завершился с ошибкой — текст выше
 set "MM_OK=0"
@@ -381,6 +396,7 @@ set "CODE=%ERRORLEVEL%"
 (echo EXITCODE:%CODE%)>"%CODE_FILE%"
 >>"%TRACE%" 2>nul echo [7/7] сервер остановлен, код %CODE% %DATE% %TIME%
 if not "%CODE%"=="0" call :dumpengine
+if not "%CODE%"=="0" (> "%SCRIPT_DIR%force-reinstall.txt" echo следующий запуск переустановит Metamod и CSSharp)
 if "%CODE%"=="0" goto finished
 if "%AUTO_RESTART%"=="1" if %RESTARTS% LSS 3 (
     set /a RESTARTS+=1
