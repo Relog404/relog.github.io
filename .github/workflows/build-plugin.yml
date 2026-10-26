@@ -80,17 +80,20 @@ jobs:
           dotnet build -c Release 2>&1 | tee -a build.log
           exit ${PIPESTATUS[0]}
 
-      - name: Сохранить лог сборки в репозиторий
+      - name: Отправить лог сборки в PR
         if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          git config user.name  'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git pull --rebase origin "${GITHUB_REF_NAME}" || true
-          cp cs2-server/plugins/PanelSkins/build.log cs2-server/plugins/PanelSkins/build.log 2>/dev/null || true
-          git add cs2-server/plugins/PanelSkins/build.log
-          git diff --cached --quiet || git commit -m "ci: лог неудачной сборки плагина [skip ci]"
-          git push
+          set -uo pipefail
+          {
+            echo "### Лог сборки PanelSkins"
+            echo ""
+            echo "\`\`\`"
+            find . -name 'build.log' -exec cat {} \; 2>/dev/null | tail -c 50000
+            echo "\`\`\`"
+          } > /tmp/report.md
+          gh pr comment 1 --repo "${{ github.repository }}" --body-file /tmp/report.md || true
 
       - name: Сложить готовые файлы
         run: |
