@@ -23,8 +23,10 @@ panel/             сайт на Node.js: RCON-панель, каталог, м�
 | Виртуальные монеты, магазин, хранилище, **апгрейд-рулетка** с честным RNG | `panel/src/economy.js` |
 | Пресеты множителей ×2…×50 и настраиваемые базовые шансы | `panel/src/store.js`, админка |
 | **Колесо апгрейда**: зелёный сектор = шанс, стрелка останавливается по `roll` | `panel/public/app.js` (`renderWheel`, `spinWheel`) |
-| **Кейсы** с отдельной анимацией и ценой из ожидания дропа | `panel/src/cases.js`, вкладка «Кейсы» |
+| **Кейсы**: 48 настоящих кейсов CS2 (картинки и состав с площадки Steam), шансы как у Valve | `panel/src/cases.js`, `panel/data/cases.json`, `scripts/build-cases.mjs` |
+| Оценка цен до синхронизации со Steam (редкость, износ, StatTrak) | `panel/src/estimate.js` |
 | Реальные цены с площадки Steam (синхронизация порциями) | `panel/src/prices.js`, админка → «Цены Steam» |
+| Шансы апгрейда в процентах (×2 = 50%, ×8 = 35%, потолок 80%) | `panel/src/store.js`, `economy.chanceForMultiplier()` |
 | Цены в монетах, рублях или долларах (переключатель на сайте) | `panel/src/store.js`, `GET/PATCH /api/settings` |
 | Админка: статистика, игроки, монеты, баны, правки каталога | `panel/src/app.js` (`/api/admin/*`) |
 | **Серверный скинченджер**: плагин красит оружие игроков их скинами с сайта | `cs2-server/plugins/PanelSkins/` |

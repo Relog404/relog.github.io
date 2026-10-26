@@ -16,19 +16,44 @@ const { findItem, findSlot, itemFitsSlot, slotIndex } = items;
 const START_COINS = Number(process.env.START_COINS || 1000);
 const DAILY_COINS = Number(process.env.DAILY_COINS || 250);
 const DAILY_COOLDOWN_MS = Number(process.env.DAILY_COOLDOWN_HOURS || 20) * 3600 * 1000;
-/** Доля «в пользу дома» по умолчанию: шанс = ставка / цена цели * edge. */
+/** Доля «в пользу дома» по умолчанию (используется только в сводках). */
 const DEFAULT_EDGE = config.upgradeEdge;
 
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
 /**
- * Коэффициент для конкретного множителя (во сколько цель дороже ставки).
- * Даёт админу крутить «базовые шансы»: x2 — щедрее, x50 — скромнее.
+ * Шанс апгрейда для множителя: во сколько цель дороже ставки.
+ * Значения задаёт админ в настройках (×2 → 50%, ×8 → 35% и т.д.), между пресетами
+ * шанс интерполируется, за последним — убывает пропорционально. Сверху — maxChance (80%).
  */
-function edgeForMultiplier(multiplier) {
+export function chanceForMultiplier(multiplier) {
   const settings = store.getUpgradeSettings();
-  if (!Number.isFinite(multiplier) || multiplier <= 1) return settings.globalEdge ?? DEFAULT_EDGE;
-  const bucket = [...settings.multipliers].sort((a, b) => b - a).find((m) => multiplier >= m);
-  const value = bucket !== undefined ? settings.edgeByMultiplier[String(bucket)] : undefined;
-  return Number.isFinite(value) ? value : (settings.globalEdge ?? DEFAULT_EDGE);
+  const max = clamp(Number(settings.maxChance) || 0.8, 0.01, 1);
+  const table = settings.chanceByMultiplier || {};
+  const keys = Object.keys(table).map(Number).filter((k) => Number.isFinite(k) && k >= 1).sort((a, b) => a - b);
+  const minChance = Number(settings.minChance) || 0.01;
+  if (!keys.length) return max;
+
+  const m = Number(multiplier);
+  if (!Number.isFinite(m) || m <= 1) return max;
+  if (table[m] !== undefined) return clamp(Number(table[m]), minChance, max);
+  if (m <= keys[0]) {
+    // между «цель равна ставке» и первым пресетом — от максимума до шанса пресета
+    const t = (m - 1) / Math.max(keys[0] - 1, 0.001);
+    return clamp(max + (Number(table[keys[0]]) - max) * t, minChance, max);
+  }
+  const last = keys[keys.length - 1];
+  if (m >= last) return clamp(Number(table[last]) * (last / m), minChance, max);
+
+  const hi = keys.find((k) => k >= m);
+  const lo = [...keys].reverse().find((k) => k <= m);
+  const t = (Math.log(m) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
+  return clamp(Number(table[lo]) + (Number(table[hi]) - Number(table[lo])) * t, minChance, max);
+}
+
+/** Эффективный коэффициент «в пользу дома» — нужен для сводок и старых отчётов. */
+function edgeForMultiplier(multiplier) {
+  return Number((chanceForMultiplier(multiplier) * Math.max(1, Number(multiplier) || 1)).toFixed(4));
 }
 
 /** Множитель цели: во сколько раз цель дороже ставки. */
@@ -37,7 +62,8 @@ export function targetMultiplier(stake, targetPrice) {
   return Number((targetPrice / stake).toFixed(3));
 }
 const MIN_CHANCE = 0.01;
-const MAX_CHANCE = 0.95;
+/** Верхний предел шанса: настройки могут его только опустить. */
+const HARD_MAX_CHANCE = 0.8;
 /** Сколько монет возвращается при продаже предмета обратно в магазин. */
 const SELL_RATE = Math.min(Math.max(Number(process.env.SELL_RATE || 0.85), 0.1), 1);
 const REEL_CELLS = 40;
@@ -69,11 +95,12 @@ export function settings() {
     // Апгрейд работает и без привязанного игрового сервера: сервер нужен
     // только для синхронизации скинов в саму игру.
     serverRequired: false,
+    maxChance: Math.min(HARD_MAX_CHANCE, Number(upgrade.maxChance) || HARD_MAX_CHANCE),
     multipliers: upgrade.multipliers,
     chances: upgrade.multipliers.map((multiplier) => ({
       multiplier,
+      chance: chanceForMultiplier(multiplier),
       edge: edgeForMultiplier(multiplier),
-      chance: Math.min(MAX_CHANCE, Math.max(MIN_CHANCE, (1 / multiplier) * edgeForMultiplier(multiplier))),
     })),
   };
 }
@@ -208,8 +235,8 @@ export function previewUpgrade(steamId, uids, targetItemId) {
   const stake = chosen.reduce((sum, i) => sum + i.price, 0);
   const multiplier = targetMultiplier(stake, target.price);
   const edge = edgeForMultiplier(multiplier);
-  const rawChance = (stake / target.price) * edge;
-  const chance = Math.min(MAX_CHANCE, Math.max(MIN_CHANCE, rawChance));
+  const rawChance = chanceForMultiplier(multiplier);
+  const chance = Math.min(HARD_MAX_CHANCE, Math.min(Number(store.getUpgradeSettings().maxChance) || HARD_MAX_CHANCE, Math.max(MIN_CHANCE, rawChance)));
   return {
     stake,
     target,
@@ -397,7 +424,7 @@ export function globalStats() {
     wagered,
     paid,
     rtp: wagered > 0 ? Number((paid / wagered).toFixed(3)) : 0,
-    edge: store.getUpgradeSettings().globalEdge ?? DEFAULT_EDGE,
+    edge: Number((chanceForMultiplier(2) * 2).toFixed(4)),
     startCoins: START_COINS,
     dailyCoins: DAILY_COINS,
     sellRate: SELL_RATE,

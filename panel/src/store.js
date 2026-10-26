@@ -314,21 +314,19 @@ export function getHistory(limit = 20) {
 const clamp01 = (value) => Math.min(1, Math.max(0.1, Number(value) || 0.95));
 
 export function defaultUpgradeSettings() {
-  const g = clamp01(config.upgradeEdge);
   return {
     multipliers: [2, 4, 8, 10, 25, 50],
-    // чем больше множитель, тем меньше доля от «честного» шанса
-    edgeByMultiplier: {
-      2: Number(Math.min(1, g * 1.03).toFixed(4)),
-      4: Number(g.toFixed(4)),
-      8: Number((g * 0.97).toFixed(4)),
-      10: Number((g * 0.95).toFixed(4)),
-      25: Number((g * 0.9).toFixed(4)),
-      50: Number((g * 0.85).toFixed(4)),
-    },
-    globalEdge: g,
+    /**
+     * Шанс для каждого множителя (в долях): ×2 → 50%, ×8 → 35% и т.д.
+     * Меняется из админки; верхний предел — maxChance (80%).
+     */
+    chanceByMultiplier: { 2: 0.5, 4: 0.45, 8: 0.35, 10: 0.3, 25: 0.2, 50: 0.15 },
+    /** Максимальный шанс апгрейда — выше него шанс не поднимается никогда. */
+    maxChance: Number(process.env.MAX_CHANCE || 0.8),
     minChance: 0.01,
-    maxChance: 0.95,
+    // оставлено для совместимости: старые настройки и отчёты
+    globalEdge: clamp01(config.upgradeEdge),
+    edgeByMultiplier: {},
   };
 }
 
@@ -340,10 +338,13 @@ export function getUpgradeSettings() {
     save();
   }
   const upgrade = store.settings.upgrade;
+  const defaults = defaultUpgradeSettings();
   return {
-    ...defaultUpgradeSettings(),
+    ...defaults,
     ...upgrade,
-    edgeByMultiplier: { ...defaultUpgradeSettings().edgeByMultiplier, ...(upgrade.edgeByMultiplier || {}) },
+    multipliers: (upgrade.multipliers || defaults.multipliers).map(Number).sort((a, b) => a - b),
+    chanceByMultiplier: { ...defaults.chanceByMultiplier, ...(upgrade.chanceByMultiplier || {}) },
+    maxChance: Math.min(Math.max(Number(upgrade.maxChance ?? defaults.maxChance), 0.01), 1),
   };
 }
 
@@ -358,17 +359,18 @@ export function patchUpgradeSettings(patch) {
       .sort((a, b) => a - b)
       .slice(0, 20);
   }
-  if (patch.edgeByMultiplier && typeof patch.edgeByMultiplier === 'object') {
-    const edges = { ...next.edgeByMultiplier };
-    for (const [key, value] of Object.entries(patch.edgeByMultiplier)) {
+  if (patch.chanceByMultiplier && typeof patch.chanceByMultiplier === 'object') {
+    const chances = { ...next.chanceByMultiplier };
+    for (const [key, value] of Object.entries(patch.chanceByMultiplier)) {
       const numeric = Number(value);
-      if (Number.isFinite(numeric) && numeric > 0 && numeric <= 1) edges[String(key)] = numeric;
+      // шанс — доля от 0 до maxChance; проценты из админки уже переведены в доли
+      if (Number.isFinite(numeric) && numeric >= 0 && numeric <= next.maxChance) chances[String(key)] = numeric;
     }
-    next.edgeByMultiplier = edges;
+    next.chanceByMultiplier = chances;
   }
-  if (patch.globalEdge !== undefined) {
-    const numeric = Number(patch.globalEdge);
-    if (Number.isFinite(numeric) && numeric > 0 && numeric <= 1) next.globalEdge = numeric;
+  if (patch.maxChance !== undefined) {
+    const numeric = Number(patch.maxChance);
+    if (Number.isFinite(numeric) && numeric > 0 && numeric <= 1) next.maxChance = numeric;
   }
 
   store.settings.upgrade = next;
@@ -386,7 +388,7 @@ export function patchUpgradeSettings(patch) {
 export function defaultSiteSettings() {
   return {
     currency: config.currency,           // coins | rub | usd
-    rates: { rub: config.rateRub, usd: config.rateUsd },
+    rates: { rub: config.rateRub, usd: config.rateUsd, usdRub: config.priceSync.usdRub },
     coinRateRub: config.coinRateRub,     // сколько рублей в одной виртуальной монете
   };
 }
@@ -404,6 +406,7 @@ export function getSiteSettings() {
   return {
     currency: ['coins', 'rub', 'usd'].includes(site.currency) ? site.currency : 'coins',
     rates: { ...defaults.rates, ...(site.rates || {}) },
+    usdRub: Number(site.rates?.usdRub) > 0 ? Number(site.rates.usdRub) : defaults.rates.usdRub,
     coinRateRub: Number.isFinite(rate) && rate > 0 ? rate : defaults.coinRateRub,
   };
 }
@@ -421,6 +424,8 @@ export function patchSiteSettings(patch) {
   }
   const rate = Number(patch.coinRateRub);
   if (Number.isFinite(rate) && rate > 0 && rate < 1_000_000) next.coinRateRub = rate;
+  const usdRub = Number(patch.rates?.usdRub);
+  if (Number.isFinite(usdRub) && usdRub > 0 && usdRub < 1000) next.rates.usdRub = usdRub;
   store.settings.site = next;
   save();
   return next;

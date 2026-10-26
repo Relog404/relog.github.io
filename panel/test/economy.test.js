@@ -62,6 +62,7 @@ test('новый игрок получает стартовые монеты и 
 
 test('покупка и продажа: монеты списываются и возвращаются по курсу', async () => {
   const item = skin('Glock-18', 'Water Elemental');
+  economy.grantCoins(PLAYER, item.price * 4, 'test');
   const before = economy.publicState(PLAYER).coins;
 
   const bought = await call('POST', '/api/economy/buy', { body: { itemId: item.id } });
@@ -94,7 +95,9 @@ test('предпросмотр апгрейда считает шанс как �
   assert.equal(preview.status, 200);
   assert.equal(preview.data.stake, stake);
   assert.equal(typeof preview.data.multiplier, 'number');
-  assert.equal(preview.data.chance, Math.min(0.95, Math.max(0.01, (stake / target.price) * preview.data.edge)));
+  // шанс берётся из настроек по множителю (x2 → 50%, x8 → 35% …), максимум 80%
+  assert.equal(preview.data.chance, economy.chanceForMultiplier(preview.data.multiplier));
+  assert.ok(preview.data.chance <= 0.8 && preview.data.chance > 0);
 });
 
 test('розыгрыш детерминирован: один и тот же roll при тех же seed-ах', async () => {
@@ -143,6 +146,7 @@ test('админка: статистика, начисление монет, б�
   assert.equal(stats.status, 200);
   assert.ok(stats.data.users >= 1);
   assert.ok(stats.data.edge > 0 && stats.data.edge <= 1);
+  assert.ok(stats.data.upgrades >= 0 && typeof stats.data.rtp === 'number');
 
   const granted = await call('POST', '/api/admin/coins', { as: ADMIN, body: { steamId: PLAYER, amount: 500 } });
   assert.equal(granted.status, 200);

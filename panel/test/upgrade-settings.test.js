@@ -49,18 +49,21 @@ test('апгрейд работает без привязанного игров
 });
 
 test('пресеты: чем больше множитель, тем ниже шанс', async () => {
-  const { chances } = await (await fetch(`${baseUrl}/api/upgrade/settings`)).json();
-  const byMult = Object.fromEntries(chances.map((c) => [c.multiplier, c.chance]));
+  const settings = await (await fetch(`${baseUrl}/api/upgrade/settings`)).json();
+  const byMult = Object.fromEntries(settings.chances.map((c) => [c.multiplier, c.chance]));
 
   assert.ok(byMult[2] > byMult[8]);
   assert.ok(byMult[8] > byMult[50]);
-  // шанс x2 примерно половина «честной» (edge 0.98)
-  assert.ok(byMult[2] > 0.45 && byMult[2] <= 0.49);
-  // шанс x50 — около 1.6%
-  assert.ok(byMult[50] > 0.01 && byMult[50] < 0.02);
+  // базовые значения: x2 — 50%, x8 — 35%, x50 — 15%
+  assert.equal(byMult[2], 0.5);
+  assert.equal(byMult[8], 0.35);
+  assert.equal(byMult[50], 0.15);
+  // и ни один шанс не пробивает максимум 80%
+  assert.ok(settings.chances.every((c) => c.chance <= settings.maxChance));
+  assert.equal(settings.maxChance, 0.8);
 });
 
-test('коэффициент подставляется по множителю цели', async () => {
+test('шанс подставляется по множителю цели', async () => {
   const cheap = items.queryItems({ category: 'Пистолеты', sort: 'price-asc', pageSize: 1 }).items[0];
   economy.grantCoins(PLAYER, cheap.price * 400);
 
@@ -75,17 +78,18 @@ test('коэффициент подставляется по множителю 
   assert.ok(near2 && near50, 'нужны цели под x2 и x50');
 
   const settings = await (await fetch(`${baseUrl}/api/upgrade/settings`)).json();
-  const edges = Object.fromEntries(settings.chances.map((c) => [c.multiplier, c.edge]));
+  const chances = Object.fromEntries(settings.chances.map((c) => [c.multiplier, c.chance]));
 
   const small = await call('POST', '/api/upgrade/preview', { body: { uids, targetItemId: near2.id } });
   assert.equal(small.status, 200);
-  assert.equal(small.data.edge, edges[2], 'для x2 берётся коэффициент пресета 2');
   assert.ok(small.data.multiplier >= 2 && small.data.multiplier <= 2.4);
+  assert.ok(Math.abs(small.data.chance - economy.chanceForMultiplier(small.data.multiplier)) < 1e-9);
+  assert.ok(small.data.chance <= chances[2] + 1e-9 && small.data.chance > chances[4]);
 
   const big = await call('POST', '/api/upgrade/preview', { body: { uids, targetItemId: near50.id } });
   assert.equal(big.status, 200);
-  assert.equal(big.data.edge, edges[50], 'для x50 берётся коэффициент пресета 50');
-  assert.ok(Math.abs(big.data.chance - (stake / near50.price) * edges[50]) < 1e-9);
+  assert.ok(big.data.chance < small.data.chance, 'чем больше множитель — тем ниже шанс');
+  assert.equal(big.data.chance, economy.chanceForMultiplier(big.data.multiplier));
 });
 
 test('подбор цели под множитель', async () => {
@@ -104,27 +108,32 @@ test('админ меняет базовые шансы, и они примен�
 
   const patched = await call('PATCH', '/api/admin/upgrade/settings', {
     as: ADMIN,
-    body: { edgeByMultiplier: { 2: 0.5, 50: 0.99 }, globalEdge: 0.9 },
+    body: { chanceByMultiplier: { 2: 0.75, 50: 0.05 } },
   });
-  assert.equal(patched.data.upgrade.edgeByMultiplier['2'], 0.5);
   assert.equal(patched.status, 200);
+  assert.equal(patched.data.upgrade.chanceByMultiplier['2'], 0.75);
+  assert.equal(patched.data.upgrade.chanceByMultiplier['50'], 0.05);
 
   const after = await (await fetch(`${baseUrl}/api/upgrade/settings`)).json();
   const byMult = Object.fromEntries(after.chances.map((c) => [c.multiplier, c.chance]));
-  const beforeByMult = Object.fromEntries(before.chances.map((c) => [c.multiplier, c.chance]));
+  assert.equal(byMult[2], 0.75);
+  assert.equal(byMult[50], 0.05);
 
-  assert.ok(byMult[2] < beforeByMult[2], 'x2 стал строже');
-  assert.ok(byMult[50] > beforeByMult[50], 'x50 стал щедрее');
-  assert.equal(after.edge, 0.9);
-
-  // мусорные значения администратора игнорируются
-  const junk = await call('PATCH', '/api/admin/upgrade/settings', {
+  // шанс выше максимума не пройдёт
+  const tooHigh = await call('PATCH', '/api/admin/upgrade/settings', {
     as: ADMIN,
-    body: { edgeByMultiplier: { 2: 5 }, globalEdge: -1 },
+    body: { chanceByMultiplier: { 2: 0.95 } },
   });
-  assert.equal(junk.status, 200);
-  assert.equal(junk.data.upgrade.edgeByMultiplier['2'], 0.5);
-  assert.equal(junk.data.upgrade.globalEdge, 0.9);
+  assert.equal(tooHigh.data.upgrade.chanceByMultiplier['2'], 0.75, 'больше maxChance (0.8) — отклоняем');
+
+  const maxRaised = await call('PATCH', '/api/admin/upgrade/settings', { as: ADMIN, body: { maxChance: 0.8 } });
+  assert.equal(maxRaised.data.upgrade.maxChance, 0.8);
+
+  // возвращаем как было, чтобы не ломать остальные проверки
+  await call('PATCH', '/api/admin/upgrade/settings', {
+    as: ADMIN,
+    body: { chanceByMultiplier: { 2: 0.5, 50: 0.15 } },
+  });
 });
 
 test('обычный игрок не может менять шансы', async () => {

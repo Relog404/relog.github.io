@@ -80,22 +80,28 @@ test('список кейсов считает цену из наполнени�
   }
 });
 
-test('кейс «Ножи» содержит только ножи, а редкие предметы падают реже частых', async () => {
+test('кейсы — настоящие: картинка, состав и шансы Valve', async () => {
   const { data } = await call('GET', '/api/cases', { as: null });
-  const knives = data.cases.find((c) => c.id === 'knives');
-  assert.ok(knives.showcase.length > 0);
-  assert.ok(knives.showcase.every((item) => typeof item.image === 'string'));
+  assert.ok(data.cases.length >= 40, `ожидали десятки реальных кейсов, получили ${data.cases.length}`);
+  assert.ok(data.cases.every((box) => box.image.startsWith('https://')), 'у кейса должна быть картинка Steam');
+  assert.ok(data.cases.every((box) => box.itemsCount >= 8));
 
-  const all = data.cases.find((c) => c.id === 'all');
-  const oddsRare = all.odds['exceedingly rare'] || 0;
-  const oddsCommon = all.odds.consumer || all.odds['mil-spec'] || 0;
-  assert.ok(oddsRare < oddsCommon, `редкие (${oddsRare}) должны падать реже частых (${oddsCommon})`);
+  const weapon = data.cases.find((box) => box.type === 'weapon' && box.odds['Exceedingly Rare']);
+  assert.ok(weapon, 'нужен кейс с ножами/перчатками');
+  assert.ok(Math.abs(weapon.odds['Exceedingly Rare'] - 0.0026) < 0.0002, 'редкие предметы — 0.26%');
+  assert.ok(Math.abs(weapon.odds['Mil-Spec Grade'] - 0.7992) < 0.0002, 'армейское — 79.92%');
+  assert.ok(weapon.odds['Exceedingly Rare'] < weapon.odds['Mil-Spec Grade']);
+
+  const sum = Object.values(weapon.odds).reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(sum - 1) < 0.001, `сумма шансов ${sum}`);
+  assert.ok(weapon.showcase.length > 0 && weapon.showcase.every((item) => typeof item.image === 'string'));
+  assert.ok(weapon.showcase[0].chance <= weapon.odds['Exceedingly Rare'] + 1e-9);
 });
 
 test('открытие кейса списывает монеты, выдаёт приз и пишет историю', async () => {
   economy.grantCoins(PLAYER, 1_000_000, 'test');
   const boxes = (await call('GET', '/api/cases', { as: null })).data.cases;
-  const box = boxes.find((c) => c.id === 'stickers');
+  const box = boxes.filter((c) => c.type === 'sticker')[0] || [...boxes].sort((a, b) => a.price - b.price)[0];
 
   const before = economy.stateFor(PLAYER).coins;
   const opened = await call('POST', '/api/case/open', { body: { caseId: box.id } });
@@ -116,13 +122,13 @@ test('открытие кейса списывает монеты, выдаёт 
 });
 
 test('без монет кейс не открывается', async () => {
-  const poor = await call('POST', '/api/case/open', { body: { caseId: 'knives' }, as: PLAYER });
+  const boxes = (await call('GET', '/api/cases', { as: null })).data.cases;
+  const expensive = [...boxes].sort((a, b) => b.price - a.price)[0];
   const broke = '76561190000000009';
   economy.stateFor(broke);
-  const denied = await call('POST', '/api/case/open', { body: { caseId: 'knives' }, as: broke });
+  const denied = await call('POST', '/api/case/open', { body: { caseId: expensive.id }, as: broke });
   assert.equal(denied.status, 400);
   assert.match(denied.data.error, /монет/i);
-  assert.ok(poor.status === 200 || poor.status === 400);
 });
 
 test('неизвестный кейс — 400, а не тихая покупка', async () => {

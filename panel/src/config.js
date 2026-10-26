@@ -51,9 +51,9 @@ export const config = {
   currency: ['coins', 'rub', 'usd'].includes(String(env.CURRENCY || 'coins').toLowerCase())
     ? String(env.CURRENCY).toLowerCase()
     : 'coins',
-  /** Курс отображения: сколько рублей/долларов в одной виртуальной монете. */
+  /** Множители отображения цен (1 = «как есть»): удобно поднять цены на сайте разом. */
   rateRub: Math.min(Math.max(Number(env.RATE_RUB || 1), 0.0001), 1_000_000),
-  rateUsd: Math.min(Math.max(Number(env.RATE_USD || 0.011), 0.0001), 1_000_000),
+  rateUsd: Math.min(Math.max(Number(env.RATE_USD || 1), 0.0001), 1_000_000),
 
   /**
    * Курс виртуальной монеты к рублю: цена предмета со Steam (в ₽) делится на это число.

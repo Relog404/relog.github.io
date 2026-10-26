@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './config.js';
 import * as store from './store.js';
+import { estimateRub } from './estimate.js';
 
 const CANDIDATES = ['catalog.json', 'catalog.sample.json'];
 
@@ -35,7 +36,12 @@ export function loadItems() {
   if (cache) return cache;
 
   const map = new Map();
-  for (const item of [...loadFileItems(), ...store.getCustomItems()]) {
+  // предметы из файла переоцениваются по Steam/модели, добавленные админом — нет
+  for (const item of loadFileItems()) {
+    const normalized = normalize(item, map.size);
+    map.set(normalized.id, { ...normalized, fromCatalog: true });
+  }
+  for (const item of store.getCustomItems()) {
     const normalized = normalize(item, map.size);
     map.set(normalized.id, normalized);
   }
@@ -50,7 +56,10 @@ export function loadItems() {
       const withOverride = Number(overrides[item.id]?.price) > 0
         ? { ...item, price: Math.round(Number(overrides[item.id].price)) }
         : item;
-      return applySteamPrice(withOverride, prices[item.id], coinRate);
+      const site = store.getSiteSettings();
+      // правка админа перекрывает всё; предметы, добавленные админом, хранят свою цену
+      const manual = overrides[item.id]?.price ?? (item.fromCatalog ? undefined : item.price);
+      return applyPrice(withOverride, prices[item.id], manual, coinRate, site.rates.usdRub || 95);
     });
 
   return cache;
@@ -60,14 +69,45 @@ export function loadItems() {
  * Реальная цена с площадки Steam перекрывает базовую цену каталога.
  * Рубли → монеты по курсу настроек (монета остаётся внутренней валютой).
  */
-function applySteamPrice(item, price, coinRate) {
-  if (!price || !(Number(price.rub) > 0)) return { ...item, steamPrice: null };
-  const rub = Math.round(Number(price.rub));
-  const usd = Number(price.usd) > 0 ? Number(price.usd) : Number((rub / 95).toFixed(2));
+/**
+ * Итоговая цена предмета:
+ *  - реальная цена Steam (если предмет уже синхронизирован);
+ *  - иначе оценка по модели ( estimate.js ) — похожая на настоящую, а не «перчатки за 3 тысячи»;
+ *  - ручная правка админа перекрывает оба варианта.
+ * Внутренняя валюта — монеты: монеты = рубли / курс («сколько рублей в монете»).
+ */
+function applyPrice(item, price, override, coinRate, usdRub) {
+  const manual = Number(override);
+  if (manual > 0) {
+    const rub = Math.round(manual * coinRate);
+    return {
+      ...item,
+      price: Math.round(manual),
+      marketRub: rub,
+      marketUsd: Number((rub / usdRub).toFixed(2)),
+      marketSource: 'manual',
+      steamPrice: null,
+    };
+  }
+  if (price && Number(price.rub) > 0) {
+    const rub = Math.round(Number(price.rub));
+    return {
+      ...item,
+      price: Math.max(1, Math.round(rub / coinRate)),
+      marketRub: rub,
+      marketUsd: Number(price.usd > 0 ? price.usd : rub / usdRub).toFixed(2) * 1,
+      marketSource: 'steam',
+      steamPrice: { rub, usd: Number((rub / usdRub).toFixed(2)), updatedAt: price.updatedAt || null, name: price.name || '' },
+    };
+  }
+  const rub = estimateRub(item);
   return {
     ...item,
     price: Math.max(1, Math.round(rub / coinRate)),
-    steamPrice: { rub, usd, updatedAt: price.updatedAt || null, name: price.name || '' },
+    marketRub: rub,
+    marketUsd: Number((rub / usdRub).toFixed(2)),
+    marketSource: 'estimate',
+    steamPrice: null,
   };
 }
 

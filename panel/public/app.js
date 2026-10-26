@@ -70,23 +70,50 @@ const escapeHtml = (value) =>
 /** Курсы и выбранная валюта. Выбор игрока хранится в браузере,
  *  значение по умолчанию приходит с сервера (настройки админа). */
 function currencyState() {
-  const site = state.site || { currency: 'coins', rates: { rub: 1, usd: 0.011 } };
+  const site = state.site || {};
   return {
     currency: state.currency || site.currency || 'coins',
-    rates: { ...(site.rates || { rub: 1, usd: 0.011 }), ...(state.rates || {}) },
+    rates: { ...(site.rates || { rub: 1, usd: 1, usdRub: 95 }) },
+    coinRateRub: Number(site.coinRateRub) || 10,
+    usdRub: Number(site.usdRub || site.rates?.usdRub) || 95,
   };
 }
 
-function money(value) {
-  const amount = Number(value) || 0;
-  const { currency, rates } = currencyState();
-  if (currency === 'rub') {
-    return `${(amount * (rates.rub || 1)).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽`;
-  }
-  if (currency === 'usd') {
-    return `$${(amount * (rates.usd || 0.011)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-  return `${amount.toLocaleString('ru-RU')} 🪙`;
+const rub = (value) => `${Math.round(Number(value) || 0).toLocaleString('ru-RU')} ₽`;
+const usd = (value) => `$${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const coinsText = (value) => `${Math.round(Number(value) || 0).toLocaleString('ru-RU')} 🪙`;
+
+/** Сумма в монетах → выбранная валюта. */
+function money(coinAmount) {
+  const { currency, rates, coinRateRub, usdRub } = currencyState();
+  const amount = Number(coinAmount) || 0;
+  if (currency === 'rub') return rub(amount * coinRateRub * (rates.rub || 1));
+  if (currency === 'usd') return usd((amount * coinRateRub * (rates.usd || 1)) / usdRub);
+  return coinsText(amount);
+}
+
+/** Сумма в рублях (реальная цена Steam или оценка) → выбранная валюта. */
+function moneyRub(rubles) {
+  const { currency, rates, coinRateRub, usdRub } = currencyState();
+  const amount = Number(rubles) || 0;
+  if (currency === 'rub') return rub(amount * (rates.rub || 1));
+  if (currency === 'usd') return usd((amount * (rates.usd || 1)) / usdRub);
+  return coinsText(amount / coinRateRub);
+}
+
+/** Цена предмета: берём реальную/оценочную цену в рублях, если она есть. */
+function itemMoney(item) {
+  if (!item) return money(0);
+  if (item.marketRub) return moneyRub(item.marketRub);
+  return money(item.price);
+}
+
+/** Метка источника цены: реальная площадка Steam или оценка. */
+function priceTag(item) {
+  if (!item?.marketRub) return '';
+  if (item.marketSource === 'steam') return `<span class="steam-tag" title="Цена с площадки Steam">Steam ${moneyRub(item.marketRub)}</span>`;
+  if (item.marketSource === 'manual') return '<span class="steam-tag manual" title="Цена задана вручную в админке">цена вручную</span>';
+  return `<span class="steam-tag estimate" title="Оценка по рынку: обновите цены со Steam в админке">≈ ${moneyRub(item.marketRub)}</span>`;
 }
 
 function renderCurrencyPicker() {
@@ -97,7 +124,7 @@ function renderCurrencyPicker() {
     state.currency = picker.value;
     try { localStorage.setItem('cs2panel.currency', picker.value); } catch { /* приватный режим */ }
     renderWallet();
-    for (const render of [loadCatalog, loadTargets, loadChances, loadEquip, renderVault]) {
+    for (const render of [loadCatalog, loadTargets, loadChances, loadEquip, renderVault, renderCases]) {
       try { await render(); } catch (error) { toast(error.message, 'err'); }
     }
   };
@@ -126,10 +153,14 @@ function steamTag(item) {
 function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {}) {
   const icon = CATEGORY_ICON[item.category] || '🎁';
   const footer = {
-    shop: `<span class="price">${money(item.price)}</span><button class="btn btn-sm btn-buy" data-buy="${escapeHtml(item.id)}">купить</button>`,
-    target: `<span class="price">${money(item.price)}</span><button class="btn btn-sm" data-target="${escapeHtml(item.id)}">цель</button>`,
-    vault: `<span class="price">${money(item.price)}</span><button class="btn btn-sm btn-ghost" data-sell="${escapeHtml(item.uid)}">продать</button>`,
+    shop: `<span class="price">${itemMoney(item)}</span><button class="btn btn-sm btn-buy" data-buy="${escapeHtml(item.id)}">купить</button>`,
+    target: `<span class="price">${itemMoney(item)}</span><button class="btn btn-sm" data-target="${escapeHtml(item.id)}">цель</button>`,
+    vault: `<span class="price">${itemMoney(item)}</span><button class="btn btn-sm btn-ghost" data-sell="${escapeHtml(item.uid)}">продать</button>`,
   }[mode];
+
+  const second = item.marketRub
+    ? `<span class="price-sub">${money(item.price)}</span>`
+    : '';
 
   return `<div class="skin ${selected ? 'selected' : ''} ${inDraft ? 'in-draft' : ''}"
        data-rarity="${escapeHtml(item.rarity)}" data-id="${escapeHtml(item.id)}"
@@ -143,7 +174,7 @@ function itemCard(item, { mode = 'shop', selected = false, inDraft = false } = {
       <span>${item.float ? `износ ${item.float[0]}–${item.float[1]}` : escapeHtml(item.category)}</span>
     </div>
     <div class="skin-foot">${footer}</div>
-    ${steamTag(item)}
+    ${second}${priceTag(item)}
   </div>`;
 }
 
@@ -1385,43 +1416,45 @@ function renderCases() {
 
   grid.innerHTML = list
     .map((box) => {
-      const rarities = Object.entries(box.odds || {});
-      const chips = rarities.length > 1
-        ? rarities.slice(0, 4).map(([rarity, chance]) => `<span class="odds-chip" style="--rar:${RARITY_COLOR[rarity] || '#8b98a8'}">
-              <i></i>${escapeHtml(rarityLabel(rarity))} ${chanceText(chance)}
-            </span>`)
-        : Object.entries(box.tiers || {})
-            .filter(([, chance]) => chance > 0.001)
-            .map(([tier, chance]) => `<span class="odds-chip" style="--rar:${TIER_COLOR[tier] || '#8b98a8'}">
-              <i></i>${escapeHtml(TIER_LABEL[tier] || tier)} ${chanceText(chance)}
-            </span>`);
-      const odds = chips.join('');
+      const meta = box.rarityMeta || {};
+      const tiers = Object.entries(box.odds || {});
+      const chips = tiers
+        .filter(([, chance]) => chance >= 0.00005)
+        .slice(0, 5)
+        .map(([tier, chance]) => {
+          const color = meta[tier]?.color || TIER_COLOR[tier] || '#8b98a8';
+          const label = meta[tier]?.label || tier;
+          return `<span class="odds-chip" style="--rar:${color}"><i></i>${escapeHtml(label)} ${chanceText(chance)}</span>`;
+        })
+        .join('');
       const shots = (box.showcase || [])
         .map((item) => `<figure class="case-shot" title="${escapeHtml(`${item.weapon} — ${item.pattern}`)} · ${chanceText(item.chance)}">
-            ${item.image ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy">` : `<span>${CATEGORY_ICON[item.weapon] || '🎁'}</span>`}
+            ${item.image ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<span>🎁</span>`}
             <figcaption>${chanceText(item.chance)}</figcaption>
           </figure>`)
         .join('');
+      const affordable = (state.econ?.coins ?? 0) >= box.price;
+
       return `<article class="case-card" style="--accent:${escapeHtml(box.accent)}">
           <div class="case-visual">
-            <div class="case-crate">
-              <span class="case-crate-icon">${box.icon || '🎁'}</span>
-              <span class="case-crate-shine"></span>
+            <div class="case-cover">
+              ${box.image ? `<img src="${escapeHtml(box.image)}" alt="${escapeHtml(box.name)}" loading="lazy" onerror="this.style.display='none'">` : `<span>${box.icon || '🎁'}</span>`}
+              <span class="case-cover-glow"></span>
             </div>
             <div class="case-shots">${shots}</div>
           </div>
           <div class="case-body">
             <h3>${escapeHtml(box.name)}</h3>
-            <p class="muted small">${escapeHtml(box.blurb || '')}</p>
-            <div class="case-odds">${odds}</div>
+            ${box.blurb ? `<p class="muted small">${escapeHtml(box.blurb)}</p>` : ''}
+            <div class="case-odds">${chips}</div>
             <ul class="kv case-facts">
-              <li><span class="muted">предметов</span><span>${box.itemsCount}</span></li>
-              <li><span class="muted">от и до</span><span>${money(box.minPrice)} — ${money(box.maxPrice)}</span></li>
+              <li><span class="muted">предметов в кейсе</span><span>${box.itemsCount}</span></li>
+              <li><span class="muted">диапазон цен</span><span>${money(box.minPrice)} — ${money(box.maxPrice)}</span></li>
               <li><span class="muted">ожидание дропа</span><span>${money(box.expectation)}</span></li>
             </ul>
             <div class="case-foot">
               <span class="price">${money(box.price)}</span>
-              <button class="btn btn-buy btn-sm" data-case="${escapeHtml(box.id)}">Открыть</button>
+              <button class="btn btn-buy btn-sm" data-case="${escapeHtml(box.id)}" ${affordable ? '' : 'title="Не хватает монет"'}>Открыть</button>
             </div>
           </div>
         </article>`;
@@ -1556,8 +1589,11 @@ function renderCurrencyEditor() {
     <label class="row-label">Курс: 1 монета =
       <input type="number" step="0.01" min="0.0001" id="rateRub" value="${rates.rub}" style="width:90px"> ₽
     </label>
-    <label class="row-label">
-      <input type="number" step="0.001" min="0.0001" id="rateUsd" value="${rates.usd}" style="width:90px"> $
+    <label class="row-label">1 монета =
+      <input type="number" step="0.5" min="0.1" id="coinRateRub" value="${state.site?.coinRateRub || 10}" style="width:90px"> ₽
+    </label>
+    <label class="row-label">курс $ =
+      <input type="number" step="0.5" min="1" id="rateUsdRub" value="${rates.usdRub || 95}" style="width:90px"> ₽
     </label>
     <button class="btn" id="saveCurrency">Сохранить валюту</button>`;
 
@@ -1567,7 +1603,8 @@ function renderCurrencyEditor() {
         method: 'PATCH',
         body: JSON.stringify({
           currency: $('#currencySelect').value,
-          rates: { rub: Number($('#rateRub').value), usd: Number($('#rateUsd').value) },
+          coinRateRub: Number($('#coinRateRub').value),
+          rates: { rub: Number($('#rateRub').value), usd: 1, usdRub: Number($('#rateUsdRub').value) },
         }),
       });
       state.site = data;
@@ -1578,6 +1615,7 @@ function renderCurrencyEditor() {
       loadCatalog();
       loadEquip();
       renderVault();
+      renderCases();
       toast(`Цены теперь в валюте: ${data.currency}`, 'ok');
     } catch (error) {
       toast(error.message, 'err');
@@ -1590,28 +1628,35 @@ function renderCurrencyEditor() {
 function renderChanceEditor() {
   const box = $('#chanceEditor');
   if (!box || !state.chances) return;
+  const max = Math.round((state.chances.maxChance ?? 0.8) * 100);
 
   box.innerHTML = state.chances.chances
     .map(
       (c) => `<label class="chance-row-item">
           <span class="chance-x">×${c.multiplier}</span>
-          <input type="number" step="0.01" min="0.1" max="1" value="${c.edge}" data-edge="${c.multiplier}">
-          <span class="muted small">шанс ${(c.chance * 100).toFixed(c.chance < 0.1 ? 2 : 1)}%</span>
-        </label>`
+          <input type="number" step="1" min="1" max="${max}" value="${Math.round(c.chance * 1000) / 10}" data-chance="${c.multiplier}">
+          <span class="muted small">% шанса</span>
+        </label>`,
     )
     .join('');
-  $('#globalEdge').value = state.chances.edge;
+
+  const maxInput = $('#globalChance');
+  if (maxInput) maxInput.value = max;
+  const hint = $('#chanceHint');
+  if (hint) hint.textContent = `Максимальный шанс — ${max}%: даже если цель дешевле ставки, выше не поднимется.`;
 }
 
 async function saveChances() {
-  const edgeByMultiplier = {};
-  $$('[data-edge]').forEach((input) => {
-    edgeByMultiplier[input.dataset.edge] = Number(input.value);
+  const chanceByMultiplier = {};
+  const max = Math.min(1, Math.max(0.01, Number($('#globalChance')?.value || 80) / 100));
+  $$('[data-chance]').forEach((input) => {
+    const percent = Math.min(max * 100, Math.max(0.1, Number(input.value) || 1));
+    chanceByMultiplier[input.dataset.chance] = Number((percent / 100).toFixed(4));
   });
   try {
     const data = await api('/api/admin/upgrade/settings', {
       method: 'PATCH',
-      body: JSON.stringify({ edgeByMultiplier, globalEdge: Number($('#globalEdge').value) }),
+      body: JSON.stringify({ chanceByMultiplier, maxChance: max }),
     });
     state.chances = { ...state.chances, ...data.upgrade };
     state.config.economy = { ...state.config.economy, ...economyFromSettings(data.upgrade) };
@@ -1626,10 +1671,7 @@ async function saveChances() {
 function economyFromSettings(upgrade) {
   return {
     multipliers: upgrade.multipliers,
-    chances: upgrade.multipliers.map((multiplier) => {
-      const edge = upgrade.edgeByMultiplier[String(multiplier)] ?? upgrade.globalEdge;
-      return { multiplier, edge, chance: Math.min(0.95, Math.max(0.01, (1 / multiplier) * edge)) };
-    }),
+    maxChance: upgrade.maxChance ?? 0.8,
   };
 }
 
