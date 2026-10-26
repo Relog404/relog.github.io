@@ -35,6 +35,15 @@ set "MIN_GB=45"
 set "APP_ID=730"
 set "STEAMCMD_URL=https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
 set "PLUGIN_SRC=%SCRIPT_DIR%plugins\PanelSkins"
+set "PANEL_DIR=%SCRIPT_DIR%..\panel"
+rem ключ, по которому игровой плагин забирает скины из панели (один на всё)
+set "PANEL_KEY_FILE=%PANEL_DIR%\plugin-key.txt"
+set "PLUGIN_KEY="
+if exist "%PANEL_KEY_FILE%" set /p PLUGIN_KEY=<"%PANEL_KEY_FILE%"
+if defined PLUGIN_KEY goto key_ready
+for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "[guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')"`) do set "PLUGIN_KEY=%%K"
+>"%PANEL_KEY_FILE%" echo %PLUGIN_KEY%
+:key_ready
 
 call :setpaths
 
@@ -272,7 +281,7 @@ if "%PANEL_OK%"=="200" goto panel_ok
 echo        панель не отвечает — поднимаю её сам в отдельном окне
 where node >nul 2>&1
 if errorlevel 1 goto panel_no_node
-start "CS2 панель" /D "%PANEL_DIR%" cmd /c "npm install --no-audit --no-fund && npm start"
+start "CS2 панель" /D "%PANEL_DIR%" cmd /c "set PLUGIN_API_KEY=%PLUGIN_KEY%&& npm install --no-audit --no-fund && npm start"
 echo        жду 15 секунд, пока панель поднимется...
 timeout /t 15 /nobreak >nul
 goto panel_ok
@@ -282,13 +291,22 @@ echo        Node.js не найден — поставьте его: https://nod
 echo        без панели сервер запустится, но скины выдавать будет нечем
 
 :panel_ok
+rem панель должна принимать наш ключ: 400 — ключ верный (ругается только на SteamID), 401 — ключ чужой
+set "KEY_OK="
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri ('http://127.0.0.1:3000/api/plugin/loadout/1?key=' + '%PLUGIN_KEY%') -TimeoutSec 4 -UseBasicParsing; 'ok' } catch { $c = 0; try { $c = [int]$_.Exception.Response.StatusCode.value__ } catch { $c = 0 }; if ($c -eq 400) { 'ok' } else { 'bad' } }" 2^>nul`) do set "KEY_OK=%%A"
+if "%KEY_OK%"=="ok" (
+    echo        панель принимает ключ плагина
+) else (
+    echo        ВНИМАНИЕ: панель не принимает ключ плагина — скины не выдадутся.
+    echo        Закройте окно «CS2 панель» и запустите её заново: panel\start-windows.bat
+)
+
 
 rem свежий конфиг копируется из примера — проверим, что ключ в нём поменяли
-findstr /c:"КЛЮЧ_ИЗ_АДМИНКИ_ПАНЕЛИ" "%PLUGIN_DST%\PanelSkins.json" >nul 2>&1
-if not errorlevel 1 (
-    echo        ВНИМАНИЕ: в PanelSkins.json пустой PluginKey — панель отдаст 401.
-    echo        Возьмите ключ в админке панели ^(«Настройки»^) и впишите его в
-    echo        %PLUGIN_DST%\PanelSkins.json
+rem ключ плагина = тот же, что знает панель, иначе /api/plugin/loadout вернёт 401
+if not "%PLUGIN_KEY%"=="" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%PLUGIN_DST%\PanelSkins.json'; $j=[IO.File]::ReadAllText($f) | ConvertFrom-Json; $j.PanelUrl='http://127.0.0.1:3000'; $j.PluginKey='%PLUGIN_KEY%'; [IO.File]::WriteAllText($f,($j | ConvertTo-Json -Depth 6),(New-Object System.Text.UTF8Encoding($false)))"
+    echo        PanelSkins.json: адрес панели и ключ прописаны
 )
 
 set "ARGS=-dedicated -console -usercon -insecure -port %PORT% -maxplayers_override %MAXPLAYERS%"

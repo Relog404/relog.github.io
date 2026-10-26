@@ -59,6 +59,9 @@ echo   Остановить:         Ctrl+C в этом окне
 echo  ============================================================
 echo.
 
+rem тот же ключ, что использует игровой плагин (его создаёт CS2.bat)
+if exist "%~dp0plugin-key.txt" set /p PLUGIN_API_KEY=<"%~dp0plugin-key.txt"
+
 call npm start
 
 echo.

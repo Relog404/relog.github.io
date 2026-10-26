@@ -4,6 +4,7 @@ npm-debug.log*
 
 # Веб-панель: локальные настройки и пользовательские данные
 panel/.env
+panel/plugin-key.txt
 panel/data/store.json
 panel/data/catalog.json
 
