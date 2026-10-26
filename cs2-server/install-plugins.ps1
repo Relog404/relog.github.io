@@ -97,12 +97,16 @@ function Test-Runtime {
     return ($n -gt 0)
 }
 
-# версии зафиксированы: именно с ними собран PanelSkins.dll и проверен CS2 10955
+# версии зафиксированы и проверены вместе: CS2 1.41.9.2 (build 10955).
+# 1.0.378 - релиз с правкой под обновление CS2 1.41.9.2; на 1.0.377 сервер
+# падает, как только заходит игрок (хуки встают не по тем смещениям).
+$MmVersion  = '2.0.0.1483'
+$CssVersion = '1.0.378'
 if (-not $MetamodUrl) {
-    $MetamodUrl = 'https://github.com/alliedmodders/metamod-source/releases/download/2.0.0.1483/mmsource-2.0.0-git1483-windows.zip'
+    $MetamodUrl = "https://github.com/alliedmodders/metamod-source/releases/download/$MmVersion/mmsource-2.0.0-git1483-windows.zip"
 }
 if (-not $CssUrl) {
-    $CssUrl = 'https://github.com/roflmuffin/CounterStrikeSharp/releases/download/v1.0.377/counterstrikesharp-with-runtime-windows-1.0.377.zip'
+    $CssUrl = "https://github.com/roflmuffin/CounterStrikeSharp/releases/download/v$CssVersion/counterstrikesharp-with-runtime-windows-$CssVersion.zip"
 }
 
 $mmDir  = Join-Path $CsgoDir 'addons\metamod'
@@ -110,13 +114,18 @@ $cssDir = Join-Path $CsgoDir 'addons\counterstrikesharp'
 $fail = $false
 
 # --------------------------- Metamod ----------------------------
-if (Test-Runtime $mmDir) {
+$mmMarker = Join-Path $mmDir 'mm-version.txt'
+$mmInstalled = ''
+if (Test-Path $mmMarker) { $mmInstalled = (Get-Content $mmMarker -Raw).Trim() }
+
+if ((Test-Runtime $mmDir) -and ($mmInstalled -eq $MmVersion)) {
     Write-Host ""
     Write-Host "== Metamod ==" -ForegroundColor Cyan
-    Write-Host "   уже установлен: $mmDir"
+    Write-Host "   уже установлен: $mmDir ($mmInstalled)"
 } else {
     try {
         Install-FromZip -Url $MetamodUrl -Name 'metamod'
+        Set-Content -Path $mmMarker -Value $MmVersion
     } catch {
         $fail = $true
         Write-Host ""
@@ -128,19 +137,29 @@ if (Test-Runtime $mmDir) {
 
 # ---------------------- CounterStrikeSharp ----------------------
 # сборка with-runtime: .NET внутри, ничего ставить руками не надо
-if (Test-Runtime $cssDir) {
+$cssMarker = Join-Path $cssDir 'css-version.txt'
+$cssInstalled = ''
+if (Test-Path $cssMarker) { $cssInstalled = (Get-Content $cssMarker -Raw).Trim() }
+
+if ((Test-Runtime $cssDir) -and ($cssInstalled -eq $CssVersion)) {
     Write-Host ""
     Write-Host "== CounterStrikeSharp ==" -ForegroundColor Cyan
-    Write-Host "   уже установлен: $cssDir"
+    Write-Host "   уже установлен: $cssDir ($cssInstalled)"
 } else {
+    if ($cssInstalled -and ($cssInstalled -ne $CssVersion)) {
+        Write-Host ""
+        Write-Host "== CounterStrikeSharp ==" -ForegroundColor Cyan
+        Write-Host "   стоит $cssInstalled, нужна $CssVersion - обновляю"
+    }
     try {
         Install-FromZip -Url $CssUrl -Name 'counterstrikesharp'
+        Set-Content -Path $cssMarker -Value $CssVersion
     } catch {
         $fail = $true
         Write-Host ""
         Write-Host "COUNTERSTRIKESHARP НЕ УСТАНОВЛЕН: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "Вручную: https://github.com/roflmuffin/CounterStrikeSharp/releases" -ForegroundColor Yellow
-        Write-Host "  файл counterstrikesharp-with-runtime-windows-1.0.377.zip, папку addons распаковать в $CsgoDir" -ForegroundColor Yellow
+        Write-Host "  файл counterstrikesharp-with-runtime-windows-$CssVersion.zip, папку addons распаковать в $CsgoDir" -ForegroundColor Yellow
     }
 }
 

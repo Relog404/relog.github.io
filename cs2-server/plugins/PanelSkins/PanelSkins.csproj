@@ -11,7 +11,7 @@
          addons/counterstrikesharp/plugins/PanelSkins/ -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <!-- Версия CounterStrikeSharp, если собираем из NuGet (без локальных DLL) -->
-    <CssVersion Condition="'$(CssVersion)' == ''">1.0.377</CssVersion>
+    <CssVersion Condition="'$(CssVersion)' == ''">1.0.378</CssVersion>
   </PropertyGroup>
 
   <!-- Способ 1: указан путь к установленному CounterStrikeSharp.
