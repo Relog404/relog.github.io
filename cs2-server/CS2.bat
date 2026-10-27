@@ -396,7 +396,12 @@ echo   Сервер CS2    : порт %PORT% — в браузере не отк
 echo                   заходить из игры: connect 127.0.0.1:%PORT%
 echo   Проверка плагинов в консоли:  meta list   и   css_plugins list
 echo   VAC отключён (-insecure): игроки с VAC-баном заходят
-echo   Выкидывает с «ошибкой переполнения»? В консоли игры: rate 786432 и fps_max 300
+echo   Выкидывает с «ошибкой переполнения»? В консоли игры по очереди:
+echo       rate 786432
+echo       fps_max 300
+echo       bind "MOUSE_X" "yaw"
+echo       bind "MOUSE_Y" "pitch"
+echo   потом host_writeconfig и перезапустить CS2 вместе со Steam
 echo   Заходим так: в консоли CS2 наберите  connect 127.0.0.1:%PORT%
 if "%GSLT%"=="" echo   Без GSLT-токена сервер виден только в локальной сети: в общем списке серверов его не будет
 echo   Если плагинов нет — установите Visual C++ Redistributable x64:
