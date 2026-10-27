@@ -1,3 +1,4 @@
+using System.IO;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
@@ -58,6 +59,7 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         AddCommand("css_menu", "Меню скинов (по F1)", OnMenuCommand);
         AddCommand("css_skins", "Ссылка на сайт со скинами", OnSkinsCommand);
         AddCommand("css_refreshskins", "Обновить свои скины с сайта", OnRefreshCommand);
+        AddCommand("css_skindebug", "Почему скины не появляются", OnSkinDebugCommand);
 
         if (!Config.ApplyAttributes)
         {
@@ -369,6 +371,93 @@ public sealed class PanelSkinsPlugin : BasePlugin, IPluginConfig<PanelSkinsConfi
         catch (Exception ex)
         {
             Log($"не удалось перекрасить оружие в руках: {ex.Message}");
+        }
+    }
+
+    /**
+     * Диагностика: печатает в консоль всё, из-за чего скин может не появиться,
+     * и главное — проходит ли запись paint в оружие (читаем поле до и сразу
+     * после записи). Если «ЗАПИСЬ НЕ ПРОШЛА» — движок её отвергает, обычно
+     * это включённый FollowCS2ServerGuidelines в core.json.
+     */
+    private void OnSkinDebugCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        var target = player;
+        if (target is null || !target.IsValid)
+        {
+            foreach (var candidate in Utilities.GetPlayers())
+            {
+                if (candidate is not null && candidate.IsValid && !candidate.IsBot)
+                {
+                    target = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (target is null || !target.IsValid)
+        {
+            Log("css_skindebug: на сервере никого нет — зайди в игру и повтори");
+            return;
+        }
+
+        Log("=== skindebug ===");
+        Log($"панель {Config.PanelUrl}, ключ " +
+            (string.IsNullOrWhiteSpace(Config.PluginKey) ? "ПУСТО" : "задан") +
+            $", ApplyAttributes={Config.ApplyAttributes}, нож={Config.ApplyKnife}, перчатки={Config.ApplyGloves}");
+
+        try
+        {
+            var core = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "configs", "core.json"));
+            if (File.Exists(core))
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(core));
+                if (doc.RootElement.TryGetProperty("FollowCS2ServerGuidelines", out var flag))
+                    Log($"core.json: FollowCS2ServerGuidelines = {flag.GetRawText()} (нужно false)");
+                else
+                    Log("core.json: FollowCS2ServerGuidelines НЕ ЗАДАН — считается true, запись блокируется");
+            }
+            else
+            {
+                Log($"core.json не найден: {core}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"core.json не прочитался: {ex.Message}");
+        }
+
+        var loadout = GetLoadout(target.SteamID);
+        Log(loadout is null
+            ? $"набор с панели НЕ получен (кэш пуст), SteamID {target.SteamID}"
+            : $"набор с панели: оружие {loadout.Weapons?.Count ?? 0}, нож " +
+              (loadout.Knife is null ? "нет" : $"{loadout.Knife.Def}/{loadout.Knife.Paint}") +
+              ", перчатки " + (loadout.Gloves is null ? "нет" : $"{loadout.Gloves.Def}/{loadout.Gloves.Paint}"));
+
+        if (loadout?.Weapons is { } skins)
+            foreach (var skin in skins)
+                Log($"  скин: def={skin.Def} paint={skin.Paint} seed={skin.Seed} wear={skin.Wear}");
+
+        var weapons = target.PlayerPawn?.Value?.WeaponServices?.MyWeapons;
+        if (weapons is null)
+        {
+            Log("оружия в руках нет");
+            return;
+        }
+
+        for (var i = 0; i < weapons.Count; i++)
+        {
+            var weapon = weapons[i].Value;
+            if (weapon is null || !weapon.IsValid) continue;
+
+            var def = weapon.AttributeManager?.Item?.ItemDefinitionIndex ?? 0;
+            var before = weapon.FallbackPaintKit;
+
+            TryApplyWeaponSkin(weapon);
+
+            var after = weapon.FallbackPaintKit;
+            Log($"оружие {weapon.DesignerName}: def={def}, paint до={before}, после={after}" +
+                (after == before ? "  <-- ЗАПИСЬ НЕ ПРОШЛА" : "  <-- записано"));
         }
     }
 
