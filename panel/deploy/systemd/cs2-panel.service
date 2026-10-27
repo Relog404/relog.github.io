@@ -1,0 +1,21 @@
+[Unit]
+Description=CS2 Panel (Node.js web app)
+Documentation=https://github.com/Relog404/relog.github.io
+After=network.target
+
+[Service]
+Type=simple
+User=cs2
+Group=cs2
+WorkingDirectory=/opt/cs2-panel/panel
+EnvironmentFile=/opt/cs2-panel/panel/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Веб-панель: локальные настройки и пользовательские данные
+panel/.env
+panel/plugin-key.txt
+panel/data/store.json
+panel/data/catalog.json
+
+# Результаты установки CS2 (не коммитим бинарники игры)
+cs2-server/steamcmd/
+cs2-server/game/
+
+# Путь к серверу, который запомнил CS2.bat
+cs2-server/cs2-path.txt
+
+# Прочее
+.DS_Store
+Thumbs.db
+*.log
+
+# сборки плагинов (бинарники не коммитим)
+cs2-server/plugins/*/bin/
+cs2-server/plugins/*/obj/
+
+# лог сборки плагина из CI
+cs2-server/plugins/*/build.log

@@ -1,0 +1,118 @@
+name: Build CS2 plugin
+
+on:
+  # триггерится на любой ветке: так сборка работает и в PR, и в рабочей ветке
+  push:
+    paths:
+      - 'cs2-server/plugins/**'
+      - '.github/workflows/build-plugin.yml'
+  pull_request:
+    paths:
+      - 'cs2-server/plugins/**'
+      - '.github/workflows/build-plugin.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      css_version:
+        description: 'Версия CounterStrikeSharp из NuGet (пусто = из csproj)'
+        required: false
+        default: ''
+      commit_dll:
+        description: 'Закоммитить готовую DLL обратно в ветку'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    name: Сборка PanelSkins (.NET 10)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Собрать плагин
+        id: build
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          cd cs2-server/plugins/PanelSkins
+          rm -f build.log
+          args=""
+          [ -n "${{ inputs.css_version }}" ] && args="-p:CssVersion=${{ inputs.css_version }}"
+          dotnet build -c Release $args 2>&1 | tee build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Показать лог сборки
+        if: steps.build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          log=$(find . -name build.log | head -1)
+          {
+            echo "### Лог сборки PanelSkins (ветка ${GITHUB_REF_NAME})"
+            echo '```'
+            echo "--- начало ---"
+            head -c 12000 "$log"
+            echo ""
+            echo "--- конец ---"
+            tail -c 25000 "$log"
+            echo '```'
+          } > /tmp/report.md
+          gh pr comment 1 --repo "${{ github.repository }}" --body-file /tmp/report.md || true
+
+      - name: Проверить, что DLL собралась
+        if: always()
+        run: |
+          set -euo pipefail
+          test -f cs2-server/plugins/PanelSkins/bin/Release/net10.0/PanelSkins.dll
+
+      - name: Сложить готовые файлы
+        run: |
+          set -euo pipefail
+          out=cs2-server/plugins/PanelSkins/prebuilt
+          bin=cs2-server/plugins/PanelSkins/bin/Release/net10.0
+          mkdir -p "$out"
+          # в plugins/ кладём только саму DLL: остальное уже есть внутри CounterStrikeSharp
+          cp "$bin/PanelSkins.dll" "$out/"
+          cp cs2-server/plugins/PanelSkins/config.example.json "$out/PanelSkins.json.example"
+          cp cs2-server/plugins/PanelSkins/gamedata/panelskins.json "$out/"
+          ls -l "$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PanelSkins
+          path: cs2-server/plugins/PanelSkins/prebuilt/
+          if-no-files-found: error
+
+      - name: Приложить к релизу
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd cs2-server/plugins/PanelSkins/prebuilt
+          gh release upload "${{ github.event.release.tag_name }}" PanelSkins.dll PanelSkins.json.example panelskins.json --clobber
+
+      # Готовая DLL уезжает в репозиторий: чтобы ставить плагин без .NET SDK.
+      - name: Закоммитить DLL в ветку
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.commit_dll)
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add cs2-server/plugins/PanelSkins/prebuilt
+          if git diff --cached --quiet; then
+            echo "DLL не изменилась — коммитить нечего"
+            exit 0
+          fi
+          git commit -m "chore: обновить готовую сборку PanelSkins [skip ci]"
+          git push

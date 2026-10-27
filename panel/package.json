@@ -1,0 +1,20 @@
+{
+  "name": "cs2-panel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Веб-панель управления выделенным сервером CS2 (RCON) + каталог скинов с сохранением сборок по Steam",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18.18"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2"
+  }
+}
